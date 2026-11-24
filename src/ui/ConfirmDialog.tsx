@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -7,11 +7,25 @@ interface ConfirmDialogProps {
   cancelLabel: string;
   onConfirm: () => void;
   onCancel: () => void;
+  /** An optional third choice between cancel and confirm. */
+  secondaryLabel?: string;
+  onSecondary?: () => void;
   children: ReactNode;
 }
 
 /** Modal confirmation (native <dialog>): focus starts on the safe choice. */
-export function ConfirmDialog({ open, title, confirmLabel, cancelLabel, onConfirm, onCancel, children }: ConfirmDialogProps) {
+export function ConfirmDialog({
+  open,
+  title,
+  confirmLabel,
+  cancelLabel,
+  onConfirm,
+  onCancel,
+  secondaryLabel,
+  onSecondary,
+  children,
+}: ConfirmDialogProps) {
+  const titleId = useId();
   const ref = useRef<HTMLDialogElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
 
@@ -30,7 +44,7 @@ export function ConfirmDialog({ open, title, confirmLabel, cancelLabel, onConfir
     <dialog
       ref={ref}
       className="confirm-dialog"
-      aria-labelledby="confirm-title"
+      aria-labelledby={titleId}
       onCancel={(e) => {
         e.preventDefault();
         onCancel();
@@ -40,12 +54,17 @@ export function ConfirmDialog({ open, title, confirmLabel, cancelLabel, onConfir
       }}
     >
       <div className="dialog-body">
-        <h2 id="confirm-title">{title}</h2>
+        <h2 id={titleId}>{title}</h2>
         {children}
         <div className="dialog-actions">
           <button ref={cancelRef} type="button" className="btn" onClick={onCancel}>
             {cancelLabel}
           </button>
+          {secondaryLabel && onSecondary && (
+            <button type="button" className="btn" onClick={onSecondary}>
+              {secondaryLabel}
+            </button>
+          )}
           <button type="button" className="btn primary" onClick={onConfirm}>
             {confirmLabel}
           </button>

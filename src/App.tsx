@@ -4,13 +4,36 @@ import { SceneBuilder } from "./canvas/scene";
 import { DotEditor, type DotEditorHandle } from "./editor/DotEditor";
 import { createExportFilename, createSvgExport, downloadSvg } from "./export/exportSvg";
 import { findIsolatedNodes, LAYOUT_ENGINES, type LayoutEngine } from "./layout/initialLayout";
-import { startAutoUpdate, type AutoUpdateController } from "./pwa/autoUpdate";
+import { startAutoUpdate, type AutoUpdateController, type UpdateCheckResult } from "./pwa/autoUpdate";
 import type { Point } from "./render/shapes";
-import { loadSession, saveSession, type Viewport } from "./state/storage";
-import { GraphStore } from "./state/store";
+import { createHistory, type History } from "./state/history";
+import {
+  addGraph,
+  createDefaultName,
+  createUniqueName,
+  decideSharedOpen,
+  deriveAutoName,
+  DEFAULT_GRAPH_NAME,
+  EMPTY_GRAPH_DOT,
+  initializeLibrary,
+  LIBRARY_KEY,
+  loadGraphSession,
+  loadLibrary,
+  normalizeGraphName,
+  removeGraph,
+  replaceGraphContent,
+  saveGraphSession,
+  touchGraph,
+  updateLibrary,
+  type GraphMeta,
+  type Library,
+} from "./state/library";
+import type { PersistedSession, Viewport } from "./state/storage";
+import { createDocStateFromShared, GraphStore, type DocState } from "./state/store";
 import { AddNodePopover } from "./ui/AddNodePopover";
 import { ConfirmDialog } from "./ui/ConfirmDialog";
-import { decodeShareData, parseShareHash } from "./share/shareLink";
+import { createSharedDocument, decodeShareData, parseShareHash, type SharedDocument } from "./share/shareLink";
+import { GraphMenu } from "./ui/GraphMenu";
 import { AboutPopover } from "./ui/AboutPopover";
 import { LayoutOptionsPopover } from "./ui/LayoutOptionsPopover";
 import { SharePopover } from "./ui/SharePopover";
@@ -18,6 +41,7 @@ import { NodeInspector } from "./ui/NodeInspector";
 import {
   AddEdgeIcon,
   AddNodeIcon,
+  ChevronDownIcon,
   DownloadIcon,
   ErrorIcon,
   FitIcon,
@@ -77,11 +101,56 @@ function checkTypingTarget(target: EventTarget | null): boolean {
   return !!el.closest?.(".cm-editor, input, textarea, select, [contenteditable='true']");
 }
 
-export function App() {
-  const session = useMemo(() => loadSession(), []);
+interface WorkspaceProps {
+  graph: GraphMeta;
+  graphs: GraphMeta[];
+  session: PersistedSession | null;
+  /** The shell calls this to save the graph right now (before switching, sharing or reloading). */
+  saveRef: React.MutableRefObject<(() => void) | null>;
+  /** `dotName` is the DOT graph name of a valid text, or null while it has an error. */
+  onSave: (id: string, history: History<DocState>, viewport: Viewport | null, edited: boolean, dotName: string | null) => void;
+  onSwitchGraph: (id: string) => void;
+  onCreateGraph: () => void;
+  onRenameGraph: (id: string, name: string) => void;
+  onDeleteGraph: (graph: GraphMeta) => void;
+  notice: string | null;
+  onNotice: (notice: string | null) => void;
+  /** A shell dialog is open: keyboard shortcuts pause. */
+  blocked: boolean;
+  updateReady: boolean;
+  onApplyUpdate: () => void;
+  installEvent: BeforeInstallPromptEvent | null;
+  onInstall: () => void;
+  onCheckForUpdates: () => Promise<UpdateCheckResult>;
+}
+
+/** One graph's editor, canvas and toolbar. Remounted (keyed by graph ID) when another graph opens. */
+function GraphWorkspace({
+  graph: storedGraph,
+  graphs,
+  session,
+  saveRef,
+  onSave,
+  onSwitchGraph,
+  onCreateGraph,
+  onRenameGraph,
+  onDeleteGraph,
+  notice,
+  onNotice: setNotice,
+  blocked,
+  updateReady,
+  onApplyUpdate,
+  installEvent,
+  onInstall,
+  onCheckForUpdates,
+}: WorkspaceProps) {
   const store = useMemo(() => new GraphStore(session?.history ?? null), [session]);
   const state = useSyncExternalStore(store.subscribe, store.getState);
   const present = state.history.present;
+  // An auto-named graph shows its DOT graph name right away (the index catches up on the next save).
+  const dotName = state.error ? null : (state.model?.name ?? null);
+  const liveName = useMemo(() => deriveAutoName(storedGraph, dotName, graphs), [storedGraph, dotName, graphs]);
+  const graph = useMemo(() => (liveName ? { ...storedGraph, name: liveName } : storedGraph), [storedGraph, liveName]);
   const builderRef = useRef(new SceneBuilder());
   const editorRef = useRef<DotEditorHandle>(null);
 
@@ -97,15 +166,13 @@ export function App() {
   const [layoutOptionsOpen, setLayoutOptionsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [graphMenuOpen, setGraphMenuOpen] = useState(false);
   const closeShare = useCallback(() => setShareOpen(false), []);
   const closeAbout = useCallback(() => setAboutOpen(false), []);
+  const closeGraphMenu = useCallback(() => setGraphMenuOpen(false), []);
   const [suggestedId, setSuggestedId] = useState("n1");
-  const [notice, setNotice] = useState<string | null>(null);
-  const [updateReady, setUpdateReady] = useState(false);
-  const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [editorWidth, setEditorWidth] = useState(readEditorWidth);
   const [mobilePane, setMobilePane] = useState<"editor" | "canvas">("canvas");
-  const updaterRef = useRef<AutoUpdateController | null>(null);
   const fitRequested = useRef(viewport === null);
 
   const positions = state.dragPositions ?? present.positions;
@@ -157,49 +224,34 @@ export function App() {
   /* Persistence & updates                                           */
   /* -------------------------------------------------------------- */
 
-  const latest = useRef({ history: state.history, viewport });
-  latest.current = { history: state.history, viewport };
-  const flushSave = useCallback(() => {
-    saveSession(latest.current.history, latest.current.viewport);
-  }, []);
+  // Save after a pause, when the shell asks (switching graphs, sharing, reloading) and on unmount.
+  // Only changes since the last save are written, so a graph the shell replaced or deleted is never clobbered.
+  const viewportRef = useRef(viewport);
+  viewportRef.current = viewport;
+  const mountedHistory = useRef(store.getState().history);
+  const lastSaved = useRef({ history: session?.history ?? null, viewport: session?.viewport ?? null });
+  const saveNow = useCallback(() => {
+    store.flush();
+    const { history, model, error } = store.getState();
+    const vp = viewportRef.current;
+    if (history === lastSaved.current.history && vp === lastSaved.current.viewport) return;
+    const edited = history !== lastSaved.current.history && history !== mountedHistory.current;
+    lastSaved.current = { history, viewport: vp };
+    onSave(graph.id, history, vp, edited, error ? null : (model?.name ?? null));
+  }, [store, onSave, graph.id]);
 
   useEffect(() => {
-    const timer = setTimeout(flushSave, 400);
+    const timer = setTimeout(saveNow, 400);
     return () => clearTimeout(timer);
-  }, [state.history, viewport, flushSave]);
+  }, [state.history, viewport, saveNow]);
 
   useEffect(() => {
-    const onHide = (): void => {
-      if (document.visibilityState === "hidden") flushSave();
-    };
-    window.addEventListener("pagehide", flushSave);
-    document.addEventListener("visibilitychange", onHide);
+    saveRef.current = saveNow;
     return () => {
-      window.removeEventListener("pagehide", flushSave);
-      document.removeEventListener("visibilitychange", onHide);
+      saveNow();
+      if (saveRef.current === saveNow) saveRef.current = null;
     };
-  }, [flushSave]);
-
-  useEffect(() => {
-    const controller = startAutoUpdate({
-      version: __APP_VERSION__,
-      onUpdateReady: () => setUpdateReady(true),
-      onBeforeReload: flushSave,
-    });
-    updaterRef.current = controller;
-    const onInstallPrompt = (event: Event): void => {
-      event.preventDefault();
-      setInstallEvent(event as BeforeInstallPromptEvent);
-    };
-    const onInstalled = (): void => setInstallEvent(null);
-    window.addEventListener("beforeinstallprompt", onInstallPrompt);
-    window.addEventListener("appinstalled", onInstalled);
-    return () => {
-      controller.dispose();
-      window.removeEventListener("beforeinstallprompt", onInstallPrompt);
-      window.removeEventListener("appinstalled", onInstalled);
-    };
-  }, [flushSave]);
+  }, [saveRef, saveNow]);
 
   useEffect(() => {
     try {
@@ -216,34 +268,6 @@ export function App() {
       // storage unavailable
     }
   }, [showHandMarks]);
-
-  // Open graphs from share links (#share=...), now and whenever the hash changes.
-  useEffect(() => {
-    const openFromHash = async (): Promise<void> => {
-      const data = parseShareHash(window.location.hash);
-      if (!data) return;
-      history.replaceState(null, "", window.location.pathname + window.location.search);
-      try {
-        const doc = await decodeShareData(data);
-        store.importSharedDocument(doc);
-        setSelection(null);
-        fitRequested.current = true;
-        setNotice("Opened a shared graph. Undo returns to your previous graph.");
-      } catch (error) {
-        setNotice(`Could not open the share link. ${error instanceof Error ? error.message : ""}`.trim());
-      }
-    };
-    void openFromHash();
-    const onHashChange = (): void => void openFromHash();
-    window.addEventListener("hashchange", onHashChange);
-    return () => window.removeEventListener("hashchange", onHashChange);
-  }, [store]);
-
-  useEffect(() => {
-    if (!notice) return;
-    const timer = setTimeout(() => setNotice(null), 4500);
-    return () => clearTimeout(timer);
-  }, [notice]);
 
   /* -------------------------------------------------------------- */
   /* Actions                                                         */
@@ -352,8 +376,7 @@ export function App() {
 
   const handleDownload = (): void => {
     if (!scene || !state.model) return;
-    const name = state.model.name;
-    downloadSvg(createSvgExport(scene, name || "graph"), createExportFilename(name));
+    downloadSvg(createSvgExport(scene, graph.name), createExportFilename(graph.name));
   };
 
   const handleUndo = (): void => {
@@ -368,7 +391,7 @@ export function App() {
   // Global shortcuts (the editor keeps its own undo for typing).
   const shortcutRef = useRef<(event: KeyboardEvent) => void>(() => {});
   shortcutRef.current = (event: KeyboardEvent) => {
-    if (pendingLayout || addNodeOpen) return;
+    if (blocked || pendingLayout || addNodeOpen) return;
     const mod = event.metaKey || event.ctrlKey;
     const typing = checkTypingTarget(event.target);
     if (mod && !typing && event.key.toLowerCase() === "z") {
@@ -429,6 +452,7 @@ export function App() {
   /* -------------------------------------------------------------- */
 
   const model = state.model;
+  const shareDoc = useMemo(() => createSharedDocument(present, { id: graph.id, name: graph.name }), [present, graph.id, graph.name]);
   const engineLabel = LAYOUT_ENGINES.find((e) => e.id === present.engine)?.label ?? present.engine;
   const pendingEngineLabel = pendingLayout ? LAYOUT_ENGINES.find((e) => e.id === pendingLayout.engine)?.label : "";
   const handCount = present.manualNodes.filter((id) => model?.nodes.has(id)).length;
@@ -523,6 +547,33 @@ export function App() {
           <span>Graph Shift</span>
         </div>
 
+        <div className="group graph-group">
+          <button
+            type="button"
+            className="btn graph-toggle"
+            data-graph-toggle
+            aria-expanded={graphMenuOpen}
+            aria-haspopup="dialog"
+            aria-label={`Graph: ${graph.name}`}
+            title="Rename, switch or create graphs"
+            onClick={() => setGraphMenuOpen((open) => !open)}
+          >
+            <span className="graph-toggle-name">{graph.name}</span>
+            <ChevronDownIcon />
+          </button>
+          {graphMenuOpen && (
+            <GraphMenu
+              graph={graph}
+              graphs={graphs}
+              onSwitch={onSwitchGraph}
+              onCreate={onCreateGraph}
+              onRename={(name) => onRenameGraph(graph.id, name)}
+              onDelete={onDeleteGraph}
+              onClose={closeGraphMenu}
+            />
+          )}
+        </div>
+
         <div className="group layout-group">
           <label className="field-label" htmlFor="layout-select">
             Layout
@@ -567,7 +618,7 @@ export function App() {
           )}
         </div>
 
-        <div className="group">
+        <div className="group history-group">
           <button type="button" className="btn icon-only" onClick={handleUndo} disabled={!state.canUndo} title={`Undo (${MOD}Z)`} aria-label="Undo">
             <UndoIcon />
           </button>
@@ -640,7 +691,7 @@ export function App() {
         <div className="spacer" />
 
         {updateReady && (
-          <button type="button" className="btn update" onClick={() => updaterRef.current?.applyUpdate()} title="A newer version is ready. Your work is saved.">
+          <button type="button" className="btn update" onClick={onApplyUpdate} title="A newer version is ready. Your work is saved.">
             Update available — Reload
           </button>
         )}
@@ -648,10 +699,7 @@ export function App() {
           <button
             type="button"
             className="btn icon-only"
-            onClick={() => {
-              void installEvent.prompt();
-              setInstallEvent(null);
-            }}
+            onClick={onInstall}
             title="Install Graph Shift to use it offline as an app"
             aria-label="Install app"
           >
@@ -689,21 +737,14 @@ export function App() {
           </button>
           {shareOpen && (
             <SharePopover
-              doc={{
-                dot: present.dot,
-                engine: present.engine,
-                groupIsolated: present.groupIsolated,
-                positions: present.positions,
-                routes: present.routes,
-                manualNodes: present.hasManualChanges ? present.manualNodes : [],
-              }}
+              doc={shareDoc}
               onClose={closeShare}
             />
           )}
           {aboutOpen && (
             <AboutPopover
               version={__APP_VERSION__}
-              onCheckForUpdates={() => updaterRef.current?.checkNow() ?? Promise.resolve("unavailable")}
+              onCheckForUpdates={onCheckForUpdates}
               onClose={closeAbout}
             />
           )}
@@ -879,5 +920,288 @@ export function App() {
         )}
       </ConfirmDialog>
     </div>
+  );
+}
+
+const STORAGE_FULL_NOTICE = "Browser storage is full, so no graph was added. Delete a graph you no longer need and try again.";
+
+interface PendingShare {
+  doc: SharedDocument;
+  /** The graph in this browser with the link's ID. */
+  meta: GraphMeta;
+}
+
+/**
+ * The graph library around the workspace: which graph is open, share links,
+ * updates and installation. Storage writes for graphs happen here.
+ */
+export function App() {
+  const [library, setLibrary] = useState<Library>(() => initializeLibrary());
+  const libraryRef = useRef(library);
+  /** Bumped to remount the workspace after the shell rewrote the open graph's storage. */
+  const [revision, setRevision] = useState(0);
+  const saveRef = useRef<(() => void) | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [pendingShare, setPendingShare] = useState<PendingShare | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<GraphMeta | null>(null);
+  const [updateReady, setUpdateReady] = useState(false);
+  const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
+  const updaterRef = useRef<AutoUpdateController | null>(null);
+
+  const commitLibrary = useCallback((next: Library) => {
+    libraryRef.current = next;
+    setLibrary(next);
+  }, []);
+
+  const active = library.graphs.find((g) => g.id === library.activeId) ?? library.graphs[0];
+  // `revision` forces a fresh read after the shell rewrote the open graph.
+  const session = useMemo(() => loadGraphSession(active.id), [active.id, revision]);
+
+  const saveActive = useCallback(() => saveRef.current?.(), []);
+
+  const handleSave = useCallback(
+    (id: string, history: History<DocState>, viewport: Viewport | null, edited: boolean, dotName: string | null) => {
+      saveGraphSession(id, history, viewport);
+      const meta = libraryRef.current.graphs.find((g) => g.id === id);
+      if (!meta || !edited) return;
+      const name = deriveAutoName(meta, dotName, libraryRef.current.graphs);
+      commitLibrary(touchGraph(libraryRef.current, meta, { updatedAt: Date.now(), ...(name ? { name } : {}) }));
+    },
+    [commitLibrary],
+  );
+
+  const switchGraph = useCallback(
+    (id: string) => {
+      saveActive();
+      commitLibrary(updateLibrary(libraryRef.current, (lib) => ({ ...lib, activeId: id })));
+    },
+    [saveActive, commitLibrary],
+  );
+
+  const createGraph = useCallback(() => {
+    saveActive();
+    const doc = createDocStateFromShared({ dot: EMPTY_GRAPH_DOT, engine: "hierarchical" });
+    const name = createUniqueName(DEFAULT_GRAPH_NAME, loadLibrary()?.graphs ?? libraryRef.current.graphs);
+    const { library: next, saved } = addGraph(libraryRef.current, { name, autoName: true, history: createHistory(doc) });
+    if (!saved) {
+      setNotice(STORAGE_FULL_NOTICE);
+      return;
+    }
+    commitLibrary(next);
+    setNotice(`Created “${name}”. Its name follows the DOT graph name until you rename it.`);
+  }, [saveActive, commitLibrary]);
+
+  const renameGraph = useCallback(
+    (id: string, name: string) => {
+      const meta = libraryRef.current.graphs.find((g) => g.id === id);
+      if (meta) commitLibrary(touchGraph(libraryRef.current, meta, { name: normalizeGraphName(name) || meta.name, autoName: false }));
+    },
+    [commitLibrary],
+  );
+
+  const deleteGraph = useCallback(
+    (meta: GraphMeta) => {
+      saveActive();
+      const next = removeGraph(libraryRef.current, meta.id);
+      if (!next.graphs.length) return;
+      commitLibrary(next);
+      setNotice(`Deleted “${meta.name}”.`);
+    },
+    [saveActive, commitLibrary],
+  );
+
+  /** Add a shared graph to the library (keeping the link's ID unless it is taken) and open it. */
+  const addSharedGraph = useCallback(
+    (doc: SharedDocument, options: { keepId: boolean }) => {
+      const graphs = loadLibrary()?.graphs ?? libraryRef.current.graphs;
+      const defaultName = createDefaultName(doc.dot);
+      const name = createUniqueName(doc.name ?? defaultName, graphs);
+      const { library: next, saved } = addGraph(libraryRef.current, {
+        id: options.keepId ? doc.id : undefined,
+        name,
+        // A name the sender never chose keeps following the DOT name.
+        autoName: !doc.name || doc.name === defaultName,
+        history: createHistory(createDocStateFromShared(doc)),
+      });
+      if (!saved) return null;
+      commitLibrary(next);
+      return name;
+    },
+    [commitLibrary],
+  );
+
+  const openSharedDocument = useCallback(
+    (doc: SharedDocument) => {
+      saveActive();
+      const current = loadLibrary() ?? libraryRef.current;
+      const decision = decideSharedOpen(current, doc, (id) => loadGraphSession(id)?.history.present ?? null);
+      if (decision.kind === "add") {
+        const name = addSharedGraph(doc, { keepId: true });
+        setNotice(name ? `Opened the shared graph “${name}”. Your other graphs are in the graph menu.` : STORAGE_FULL_NOTICE);
+      } else if (decision.kind === "switch") {
+        commitLibrary(updateLibrary(libraryRef.current, (lib) => ({ ...lib, activeId: decision.meta.id })));
+        setRevision((r) => r + 1);
+        setNotice(`Opened “${decision.meta.name}”. This browser already had the shared version.`);
+      } else {
+        setPendingShare({ doc, meta: decision.meta });
+      }
+    },
+    [saveActive, addSharedGraph, commitLibrary],
+  );
+
+  const replaceWithShared = (share: PendingShare): void => {
+    saveActive();
+    replaceGraphContent(share.meta.id, share.doc);
+    commitLibrary(
+      updateLibrary(libraryRef.current, (lib) => ({
+        ...lib,
+        activeId: share.meta.id,
+        graphs: lib.graphs.map((g) => (g.id === share.meta.id ? { ...g, updatedAt: Date.now() } : g)),
+      })),
+    );
+    setRevision((r) => r + 1);
+    setNotice(`Replaced “${share.meta.name}” with the shared version. Undo brings yours back.`);
+  };
+
+  const keepBothShared = (share: PendingShare): void => {
+    const name = addSharedGraph(share.doc, { keepId: false });
+    setNotice(name ? `Opened the shared version as “${name}”. Your “${share.meta.name}” is unchanged.` : STORAGE_FULL_NOTICE);
+  };
+
+  // Open graphs from share links (#share=...), now and whenever the hash changes.
+  useEffect(() => {
+    const openFromHash = async (): Promise<void> => {
+      const data = parseShareHash(window.location.hash);
+      if (!data) return;
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+      try {
+        openSharedDocument(await decodeShareData(data));
+      } catch (error) {
+        setNotice(`Could not open the share link. ${error instanceof Error ? error.message : ""}`.trim());
+      }
+    };
+    void openFromHash();
+    const onHashChange = (): void => void openFromHash();
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, [openSharedDocument]);
+
+  // Another tab added, renamed or removed graphs: refresh the list (this tab keeps its open graph).
+  useEffect(() => {
+    const onStorage = (event: StorageEvent): void => {
+      if (event.key !== LIBRARY_KEY) return;
+      const stored = loadLibrary();
+      if (!stored) return;
+      const keepsActive = stored.graphs.some((g) => g.id === libraryRef.current.activeId);
+      const graphs = keepsActive ? stored.graphs : [...stored.graphs, active];
+      commitLibrary({ ...stored, activeId: libraryRef.current.activeId, graphs });
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [active, commitLibrary]);
+
+  useEffect(() => {
+    const onHide = (): void => {
+      if (document.visibilityState === "hidden") saveActive();
+    };
+    window.addEventListener("pagehide", saveActive);
+    document.addEventListener("visibilitychange", onHide);
+    return () => {
+      window.removeEventListener("pagehide", saveActive);
+      document.removeEventListener("visibilitychange", onHide);
+    };
+  }, [saveActive]);
+
+  useEffect(() => {
+    const controller = startAutoUpdate({
+      version: __APP_VERSION__,
+      onUpdateReady: () => setUpdateReady(true),
+      onBeforeReload: saveActive,
+    });
+    updaterRef.current = controller;
+    const onInstallPrompt = (event: Event): void => {
+      event.preventDefault();
+      setInstallEvent(event as BeforeInstallPromptEvent);
+    };
+    const onInstalled = (): void => setInstallEvent(null);
+    window.addEventListener("beforeinstallprompt", onInstallPrompt);
+    window.addEventListener("appinstalled", onInstalled);
+    return () => {
+      controller.dispose();
+      window.removeEventListener("beforeinstallprompt", onInstallPrompt);
+      window.removeEventListener("appinstalled", onInstalled);
+    };
+  }, [saveActive]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 4500);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
+  const onCheckForUpdates = useCallback(() => updaterRef.current?.checkNow() ?? Promise.resolve<UpdateCheckResult>("unavailable"), []);
+
+  return (
+    <>
+      <GraphWorkspace
+        key={`${active.id}:${revision}`}
+        graph={active}
+        graphs={library.graphs}
+        session={session}
+        saveRef={saveRef}
+        onSave={handleSave}
+        onSwitchGraph={switchGraph}
+        onCreateGraph={createGraph}
+        onRenameGraph={renameGraph}
+        onDeleteGraph={setPendingDelete}
+        notice={notice}
+        onNotice={setNotice}
+        blocked={pendingShare !== null || pendingDelete !== null}
+        updateReady={updateReady}
+        onApplyUpdate={() => updaterRef.current?.applyUpdate()}
+        installEvent={installEvent}
+        onInstall={() => {
+          void installEvent?.prompt();
+          setInstallEvent(null);
+        }}
+        onCheckForUpdates={onCheckForUpdates}
+      />
+
+      <ConfirmDialog
+        open={pendingShare !== null}
+        title={`Replace “${pendingShare?.meta.name ?? ""}”?`}
+        confirmLabel="Replace mine"
+        secondaryLabel="Keep both"
+        cancelLabel="Cancel"
+        onCancel={() => setPendingShare(null)}
+        onSecondary={() => {
+          if (pendingShare) keepBothShared(pendingShare);
+          setPendingShare(null);
+        }}
+        onConfirm={() => {
+          if (pendingShare) replaceWithShared(pendingShare);
+          setPendingShare(null);
+        }}
+      >
+        <p>
+          The link contains a different version of <b>{pendingShare?.meta.name}</b>, a graph this browser already has. Replacing it keeps your
+          version one undo step away. <b>Keep both</b> opens the shared version as a separate graph.
+        </p>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={`Delete “${pendingDelete?.name ?? ""}”?`}
+        confirmLabel="Delete graph"
+        cancelLabel="Keep it"
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          if (pendingDelete) deleteGraph(pendingDelete);
+          setPendingDelete(null);
+        }}
+      >
+        <p>This removes the graph and its undo history from this browser. It cannot be undone.</p>
+      </ConfirmDialog>
+    </>
   );
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createEdgeKey } from "../dot/model";
 import { estimateTextWidth } from "../render/text";
-import { GraphStore, type DocState } from "./store";
+import { createDocStateFromShared, GraphStore, type DocState } from "./store";
 import { parseSession, serializeSession } from "./storage";
 
 const DOT = "digraph {\n  a -> b;\n  b -> c;\n}\n";
@@ -230,24 +230,21 @@ describe("GraphStore: layout control", () => {
 });
 
 describe("GraphStore: shared graphs", () => {
-  it("opening a shared graph is one undo step away from the previous work", () => {
-    const store = createStore();
-    store.importSharedDocument({ dot: "graph { x -- y }", engine: "circular" });
-    expect(store.present.dot).toBe("graph { x -- y }");
+  it("A shared graph without positions is laid out when it is opened.", () => {
+    const store = new GraphStore(createDocStateFromShared({ dot: "graph { x -- y }", engine: "circular" }), { measure: estimateTextWidth, immediate: true });
     expect(store.present.engine).toBe("circular");
     expect(Object.keys(store.present.positions).sort()).toEqual(["x", "y"]);
-    store.undo();
-    expect(store.present.dot).toBe(DOT);
+    expect(store.present.hasManualChanges).toBe(false);
   });
 
-  it("shared hand-placed positions are kept exactly", () => {
-    const store = createStore();
-    store.importSharedDocument({
+  it("Shared hand-placed positions are kept exactly when the graph is opened.", () => {
+    const doc = createDocStateFromShared({
       dot: "digraph { p -> q }",
       engine: "hierarchical",
       positions: { p: { x: 5, y: 7 }, q: { x: 300, y: 7 } },
       manualNodes: ["q"],
     });
+    const store = new GraphStore(doc, { measure: estimateTextWidth, immediate: true });
     expect(store.present.positions).toEqual({ p: { x: 5, y: 7 }, q: { x: 300, y: 7 } });
     expect(store.present.hasManualChanges).toBe(true);
   });

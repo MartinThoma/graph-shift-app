@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createShareLink, decodeShareData, encodeShareData, parseShareHash, type SharedDocument } from "./shareLink";
+import { checkSameSharedContent, createShareLink, decodeShareData, encodeShareData, parseShareHash, type SharedDocument } from "./shareLink";
 
 const DOC: SharedDocument = {
   dot: 'digraph G {\n  a [label="Ä \\"quoted\\""];\n  a -> b;\n}\n',
@@ -57,5 +57,27 @@ describe("Share links", () => {
   it("rejects malformed or foreign data", async () => {
     await expect(decodeShareData("v9.abc")).rejects.toThrow(/format/);
     await expect(decodeShareData("v1.not-deflate")).rejects.toThrow();
+  });
+
+  it("A link carries the graph's ID and name, and drops an unsafe ID.", async () => {
+    const doc = await decodeShareData(await encodeShareData({ ...DOC, id: "k3f9a0b1c2d3", name: "  Checkout   flow " }));
+    expect(doc.id).toBe("k3f9a0b1c2d3");
+    expect(doc.name).toBe("Checkout flow");
+    const unsafe = await decodeShareData(await encodeShareData({ ...DOC, id: "../../etc", name: "   " }));
+    expect(unsafe.id).toBeUndefined();
+    expect(unsafe.name).toBeUndefined();
+  });
+
+  it("Content comparison ignores ID, name, key order and sub-pixel positions.", () => {
+    const reordered: SharedDocument = {
+      ...DOC,
+      id: "x1234",
+      name: "Other",
+      positions: { b: { x: 100.2, y: 200 }, a: { x: 10, y: 21 } },
+    };
+    expect(checkSameSharedContent(DOC, reordered)).toBe(true);
+    expect(checkSameSharedContent(DOC, { ...DOC, dot: DOC.dot + " " })).toBe(false);
+    expect(checkSameSharedContent(DOC, { ...DOC, engine: "grid" })).toBe(false);
+    expect(checkSameSharedContent(DOC, { ...DOC, manualNodes: [] })).toBe(false);
   });
 });

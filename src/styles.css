@@ -411,6 +411,138 @@ a.btn {
   width: 300px;
 }
 
+/* Graph menu: the open graph's name in the toolbar, and the library popover. */
+.brand + .graph-group {
+  margin-left: -8px;
+}
+
+.graph-toggle {
+  max-width: 240px;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.graph-toggle-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graph-toggle svg {
+  flex: none;
+  color: var(--muted);
+}
+
+.graph-menu {
+  width: 320px;
+}
+
+.graph-facts code {
+  color: var(--ink-2);
+  user-select: all;
+}
+
+.graph-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hair);
+}
+
+.graph-list-head h2 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.graph-list {
+  list-style: none;
+  margin: 0 -6px;
+  padding: 0;
+  max-height: min(280px, 40vh);
+  overflow-y: auto;
+  display: grid;
+  gap: 2px;
+}
+
+.graph-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px 0 0;
+  border-radius: var(--radius);
+}
+
+.graph-row:hover {
+  background: var(--control-hover);
+}
+
+.graph-row[aria-current="true"] {
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+
+.graph-open {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  height: 34px;
+  padding: 0 6px;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius);
+}
+
+.graph-row[aria-current="true"] .graph-open {
+  cursor: default;
+  font-weight: 600;
+}
+
+.graph-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graph-time {
+  flex: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.graph-delete.btn {
+  width: 28px;
+  height: 28px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+.graph-delete.btn:hover:not(:disabled) {
+  color: var(--danger-text);
+  border-color: var(--control);
+  background: var(--white);
+}
+
+.graph-delete.btn:disabled {
+  border-color: transparent;
+  color: var(--disabled);
+}
+
 .popover label.check > span {
   font-size: 13px;
   font-weight: 600;
@@ -1036,37 +1168,77 @@ a.btn {
   .app {
     grid-template-rows: auto auto 1fr;
   }
-  /* Two rows: layout, history and the primary action on top; editing below. */
+  /* Two rows: the open graph, layout and history on top; editing and output below. */
   .toolbar {
     height: auto;
     padding: 8px 12px;
     gap: 8px 10px;
     flex-wrap: wrap;
   }
-  .brand span,
+  .brand,
   .field-label {
     display: none;
   }
-  .brand {
+  /* Row break: everything from the add buttons on starts the second row. */
+  .toolbar::after {
+    content: "";
+    order: 3;
+    flex-basis: 100%;
+    height: 0;
+    margin-top: -8px;
+  }
+  .graph-group {
     order: 0;
+    flex: 1 1 72px;
+    min-width: 0;
+  }
+  .brand + .graph-group {
+    margin-left: 0;
+  }
+  .graph-toggle {
+    width: 100%;
+    max-width: none;
+    justify-content: space-between;
   }
   .layout-group {
     order: 1;
-    flex: 1 0 auto;
+    flex: 0 1 166px;
+    min-width: 0;
   }
   .layout-group select {
-    min-width: 128px;
+    min-width: 0;
     flex: 1;
-    max-width: 180px;
+    padding: 0 24px 0 8px;
+    background-position: right 8px center;
   }
-  .toolbar > .group:nth-of-type(3) {
+  /* The lock state becomes the hand tick on the select's corner, like on a hand-placed node. */
+  .layout-group .lock-state {
+    position: absolute;
+    top: -3px;
+    left: -3px;
+    margin: 0;
+    pointer-events: none;
+  }
+  .layout-group .lock-state svg {
+    width: 10px;
+    height: 10px;
+  }
+  .history-group {
     order: 2;
   }
   .spacer {
     display: none;
   }
+  .add-group {
+    order: 4;
+  }
+  .destructive-group {
+    order: 4;
+    margin-left: 0;
+  }
   .output-group {
-    order: 3;
+    order: 5;
+    margin-left: auto;
   }
   .output-group .btn:not(.primary) .label {
     display: none;
@@ -1076,15 +1248,8 @@ a.btn {
     padding: 0;
   }
   .btn.update {
-    order: 4;
-    flex-basis: 100%;
-  }
-  .add-group {
-    order: 5;
-  }
-  .destructive-group {
     order: 6;
-    margin-left: auto;
+    flex-basis: 100%;
   }
   .btn.primary .label {
     display: none;
@@ -1178,5 +1343,15 @@ a.btn {
   *::after {
     animation: none !important;
     transition: none !important;
+  }
+}
+
+/* Narrow phones: the graph name gets the chevron's room. */
+@media (max-width: 374px) {
+  .graph-toggle {
+    padding: 0 8px;
+  }
+  .graph-toggle svg {
+    display: none;
   }
 }

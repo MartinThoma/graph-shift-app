@@ -7,7 +7,8 @@ Write a graph in [DOT](https://graphviz.org/doc/info/lang.html) on the left and 
 - Five layouts: hierarchical, force-directed, radial, circular, compact grid
 - Hand-placed positions are never overwritten without asking
 - Undo/redo, autosave in your browser, works offline as an installable app (PWA)
-- Share links that contain the whole graph (compressed in the URL fragment, nothing is uploaded)
+- Several graphs per browser, each with a stable ID and a name you choose
+- Share links that contain the whole graph (compressed in the URL fragment, nothing is uploaded); opening one adds the graph and asks before replacing one you already have
 
 The full specification is in [PRODUCT.md](PRODUCT.md), the visual design in [DESIGN.md](DESIGN.md).
 

@@ -172,3 +172,23 @@ export const InfoIcon = () => (
     <path d="M8 4.9v.1" strokeWidth="1.8" />
   </Icon>
 );
+
+export const ChevronDownIcon = () => (
+  <Icon width="12" height="12">
+    <path d="M4 6l4 4 4-4" />
+  </Icon>
+);
+
+export const PlusIcon = () => (
+  <Icon>
+    <path d="M8 3v10M3 8h10" />
+  </Icon>
+);
+
+export const TrashIcon = () => (
+  <Icon>
+    <path d="M2.5 4.5h11M6.5 4.5V2.8h3v1.7" />
+    <path d="M4 4.5l.7 9h6.6l.7-9" />
+    <path d="M6.7 7v4M9.3 7v4" />
+  </Icon>
+);

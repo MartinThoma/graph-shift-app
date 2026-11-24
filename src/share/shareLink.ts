@@ -1,6 +1,6 @@
 /**
- * Share links: the whole graph (DOT text, layout settings and hand-placed
- * positions) is compressed into the URL fragment `#share=v1.<data>`.
+ * Share links: the whole graph (its ID and name, DOT text, layout settings and
+ * hand-placed positions) is compressed into the URL fragment `#share=v1.<data>`.
  * Fragments are never sent to a server, so sharing uploads nothing.
  */
 import { checkLayoutEngine, type EdgeRoute, type LayoutEngine } from "../layout/initialLayout";
@@ -15,6 +15,9 @@ const MAX_DOT_LENGTH = 2_000_000;
 
 /** The compact JSON stored in a link. */
 interface SharePayload {
+  /** The graph's stable ID, so opening a link twice finds the same graph. */
+  id?: string;
+  name?: string;
   dot: string;
   engine: LayoutEngine;
   isolated?: false;
@@ -26,7 +29,25 @@ interface SharePayload {
 }
 
 export type SharedDocument = Pick<DocState, "dot" | "engine" | "groupIsolated"> &
-  Partial<Pick<DocState, "positions" | "routes" | "manualNodes">>;
+  Partial<Pick<DocState, "positions" | "routes" | "manualNodes">> & {
+    id?: string;
+    name?: string;
+  };
+
+const MAX_NAME_LENGTH = 120;
+
+/** The shareable parts of a snapshot; positions only count once nodes were placed by hand. */
+export function createSharedDocument(doc: DocState, meta?: { id: string; name: string }): SharedDocument {
+  return {
+    ...(meta ? { id: meta.id, name: meta.name } : {}),
+    dot: doc.dot,
+    engine: doc.engine,
+    groupIsolated: doc.groupIsolated,
+    positions: doc.positions,
+    routes: doc.routes,
+    manualNodes: doc.hasManualChanges ? doc.manualNodes : [],
+  };
+}
 
 function encodeBase64Url(bytes: Uint8Array): string {
   let binary = "";
@@ -56,6 +77,8 @@ async function transformBytes(bytes: Uint8Array, stream: CompressionStream | Dec
 /** Build the compact payload for a document; positions are included only when placed by hand. */
 function createPayload(doc: SharedDocument, includePositions: boolean): SharePayload {
   const payload: SharePayload = { dot: doc.dot, engine: doc.engine };
+  if (doc.id) payload.id = doc.id;
+  if (doc.name) payload.name = doc.name;
   if (doc.groupIsolated === false) payload.isolated = false;
   if (includePositions && doc.positions && doc.manualNodes?.length) {
     payload.pos = Object.fromEntries(Object.entries(doc.positions).map(([id, p]) => [id, [Math.round(p.x), Math.round(p.y)]]));
@@ -96,6 +119,11 @@ export async function decodeShareData(data: string): Promise<SharedDocument> {
     engine: checkLayoutEngine(raw.engine) ? raw.engine : "hierarchical",
     groupIsolated: raw.isolated === false ? false : true,
   };
+  if (typeof raw.id === "string" && /^[A-Za-z0-9_-]{4,64}$/.test(raw.id)) doc.id = raw.id;
+  if (typeof raw.name === "string") {
+    const name = raw.name.replace(/\s+/g, " ").trim().slice(0, MAX_NAME_LENGTH);
+    if (name) doc.name = name;
+  }
   if (raw.pos && typeof raw.pos === "object") {
     const positions: Record<string, Point> = {};
     for (const [id, value] of Object.entries(raw.pos)) if (checkNumberPair(value)) positions[id] = { x: value[0], y: value[1] };
@@ -113,6 +141,27 @@ export async function decodeShareData(data: string): Promise<SharedDocument> {
     doc.routes = routes;
   }
   return doc;
+}
+
+/** JSON with object keys sorted, so equal content compares equal whatever the key order. */
+function stringifySorted(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : v,
+  );
+}
+
+/**
+ * Whether two documents carry the same graph as far as a share link can tell:
+ * DOT text, layout settings and (rounded) hand-placed positions. ID and name
+ * don't count.
+ */
+export function checkSameSharedContent(a: SharedDocument, b: SharedDocument): boolean {
+  const normalize = (doc: SharedDocument): SharePayload => {
+    const payload = createPayload({ ...doc, id: undefined, name: undefined }, true);
+    if (payload.hand) payload.hand = [...payload.hand].sort();
+    return payload;
+  };
+  return stringifySorted(normalize(a)) === stringifySorted(normalize(b));
 }
 
 /** Extract the share data from a location hash, or null. */

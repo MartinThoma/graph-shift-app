@@ -1,8 +1,9 @@
-/** localStorage persistence of the editing session. */
+/** localStorage format of one graph's editing session (history and viewport). */
 import { checkLayoutEngine } from "../layout/initialLayout";
 import type { History } from "./history";
 import type { DocState } from "./store";
 
+/** Where the single graph lived before the graph library; only read for migration. */
 export const STORAGE_KEY = "graph-shift:session:v1";
 const PERSISTED_HISTORY = 50;
 
@@ -66,35 +67,19 @@ export function parseSession(raw: string | null): PersistedSession | null {
   }
 }
 
-export function loadSession(storage: Storage | null = getStorage()): PersistedSession | null {
-  try {
-    return parseSession(storage?.getItem(STORAGE_KEY) ?? null);
-  } catch {
-    return null;
-  }
-}
-
-/** Save the session; returns false when storage is unavailable or full. */
-export function saveSession(history: History<DocState>, viewport: Viewport | null, storage: Storage | null = getStorage()): boolean {
+/** Save a session under `key`; returns false when storage is unavailable or full. */
+export function saveSessionTo(key: string, history: History<DocState>, viewport: Viewport | null, storage: Storage | null): boolean {
   if (!storage) return false;
   try {
-    storage.setItem(STORAGE_KEY, serializeSession(history, viewport));
+    storage.setItem(key, serializeSession(history, viewport));
     return true;
   } catch {
     // Quota exceeded: retry without history.
     try {
-      storage.setItem(STORAGE_KEY, serializeSession({ past: [], present: history.present, future: [] }, viewport));
+      storage.setItem(key, serializeSession({ past: [], present: history.present, future: [] }, viewport));
       return true;
     } catch {
       return false;
     }
-  }
-}
-
-function getStorage(): Storage | null {
-  try {
-    return typeof localStorage !== "undefined" ? localStorage : null;
-  } catch {
-    return null;
   }
 }

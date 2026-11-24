@@ -1,11 +1,38 @@
 import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 
-async function getDot(page: Page): Promise<string> {
+/** The open graph's saved session (as stored in localStorage). */
+async function getSession(page: Page): Promise<{ history: { present: { dot: string; positions: Record<string, { x: number; y: number }> } } } | null> {
   return page.evaluate(() => {
-    const raw = localStorage.getItem("graph-shift:session:v1");
-    return raw ? (JSON.parse(raw).history.present.dot as string) : "";
+    const library = localStorage.getItem("graph-shift:library:v1");
+    if (!library) return null;
+    const raw = localStorage.getItem("graph-shift:graph:v1:" + JSON.parse(library).activeId);
+    return raw ? JSON.parse(raw) : null;
   });
+}
+
+async function getDot(page: Page): Promise<string> {
+  return (await getSession(page))?.history.present.dot ?? "";
+}
+
+async function getLibrary(page: Page): Promise<{ activeId: string; graphs: { id: string; name: string }[] }> {
+  return page.evaluate(() => JSON.parse(localStorage.getItem("graph-shift:library:v1")!));
+}
+
+async function createShareUrl(page: Page): Promise<string> {
+  await page.getByRole("button", { name: "Share" }).click();
+  const input = page.getByRole("dialog", { name: "Share link" }).getByRole("textbox", { name: "Share link" });
+  await expect(input).toHaveValue(/#share=v1\./);
+  const url = await input.inputValue();
+  await page.keyboard.press("Escape");
+  return url;
+}
+
+async function replaceDot(page: Page, dot: string): Promise<void> {
+  await page.locator(".cm-content").click();
+  await page.keyboard.press("Control+a");
+  await page.keyboard.insertText(dot);
+  await page.waitForTimeout(500);
 }
 
 async function getEditorText(page: Page): Promise<string> {
@@ -334,7 +361,7 @@ test("unconnected nodes are collected in a grid, which can be switched off in th
   expect(await getNodeCenter(page, "lonely1")).not.toEqual(lonely);
 });
 
-test("a share link carries the whole graph with hand-placed positions and opens as an undoable step", async ({ page, browser }) => {
+test("a share link carries the whole graph with hand-placed positions and opens as a new graph", async ({ page, browser }) => {
   await dragNode(page, "db", 120, 40);
   const text = await getEditorText(page);
   await page.getByRole("button", { name: "Share" }).click();
@@ -349,23 +376,163 @@ test("a share link carries the whole graph with hand-placed positions and opens 
   const page2 = await other.newPage();
   await page2.goto(url);
   await page2.locator('.graph-canvas [data-node-id="db"]').waitFor();
-  await expect(page2.locator(".status")).toContainText("Opened a shared graph");
+  // The recipient's own sample graph is also called "checkout", so the shared one gets a distinct name.
+  await expect(page2.locator(".status")).toContainText("Opened the shared graph “checkout 2”");
   expect(await getEditorText(page2)).toBe(text);
   expect(page2.url()).not.toContain("#share=");
   // The same (rounded) positions as on the sharing side.
-  const readPositions = (p: typeof page) =>
-    p.evaluate(() => JSON.parse(localStorage.getItem("graph-shift:session:v1")!).history.present.positions as Record<string, { x: number; y: number }>);
   await page2.waitForTimeout(600);
-  const shared = await readPositions(page2);
-  const original = await readPositions(page);
+  const shared = (await getSession(page2))!.history.present.positions;
+  const original = (await getSession(page))!.history.present.positions;
   for (const id of Object.keys(original)) {
     expect(shared[id].x).toBeCloseTo(original[id].x, -0.5);
     expect(shared[id].y).toBeCloseTo(original[id].y, -0.5);
   }
-  // Undo returns to what was there before (the sample graph in a fresh profile).
-  await page2.getByRole("button", { name: "Undo" }).click();
-  await expect(page2.locator(".cm-content")).toContainText("Drag nodes to tidy the picture");
+  // The recipient now has two graphs: their own sample and the shared one, with the sender's ID.
+  const library = await getLibrary(page2);
+  expect(library.graphs).toHaveLength(2);
+  expect(library.activeId).toBe((await getLibrary(page)).activeId);
   await other.close();
+});
+
+test("opening a link adds a graph and leaves the open one untouched", async ({ page, browser }) => {
+  const other = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const sender = await other.newPage();
+  await sender.goto("/");
+  await sender.locator('.graph-canvas [data-node-id="api"]').waitFor();
+  await replaceDot(sender, "digraph roadmap {\n  plan -> build;\n}\n");
+  await sender.locator('.graph-canvas [data-node-id="build"]').waitFor();
+  const url = await createShareUrl(sender);
+  await other.close();
+
+  await replaceDot(page, "digraph mine {\n  keep -> me;\n}\n");
+  await page.locator('.graph-canvas [data-node-id="me"]').waitFor();
+  await page.goto(url);
+  await page.locator('.graph-canvas [data-node-id="build"]').waitFor();
+  // The sender never renamed the graph, so its name followed the DOT text.
+  await expect(page.getByRole("button", { name: "Graph: roadmap" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Graph: roadmap" }).click();
+  const menu = page.getByRole("dialog", { name: "Graphs" });
+  await expect(menu).toContainText("2 graphs in this browser");
+  // The receiver's own graph took its name from its DOT text too.
+  await menu.getByRole("button", { name: /^Open “mine”/ }).click();
+  await page.locator('.graph-canvas [data-node-id="me"]').waitFor();
+  expect(await getEditorText(page)).toContain("keep -> me");
+});
+
+test("a link to a graph this browser has with other content asks before replacing it", async ({ page }) => {
+  const url = await createShareUrl(page);
+  await page.locator(".cm-content").click();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.type("// local change\n");
+  await page.waitForTimeout(600);
+
+  // Cancel changes nothing.
+  await page.goto(url);
+  const dialog = page.getByRole("dialog", { name: "Replace “checkout”?" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.locator(".cm-content")).toContainText("// local change");
+  expect((await getLibrary(page)).graphs).toHaveLength(1);
+
+  // Keep both adds the shared version as a separate graph.
+  await page.goto(url.replace("#", "?again#"));
+  await page.getByRole("dialog", { name: "Replace “checkout”?" }).getByRole("button", { name: "Keep both" }).click();
+  await expect(page.getByRole("button", { name: "Graph: checkout 2" })).toBeVisible();
+  await expect(page.locator(".cm-content")).not.toContainText("// local change");
+  expect((await getLibrary(page)).graphs).toHaveLength(2);
+
+  // Replace mine swaps the content in place, and undo brings the local version back.
+  await page.getByRole("button", { name: "Graph: checkout 2" }).click();
+  await page.getByRole("dialog", { name: "Graphs" }).getByRole("button", { name: /^Open “checkout”/ }).click();
+  await expect(page.locator(".cm-content")).toContainText("// local change");
+  await page.goto(url.replace("#", "?third#"));
+  await page.getByRole("dialog", { name: "Replace “checkout”?" }).getByRole("button", { name: "Replace mine" }).click();
+  await expect(page.locator(".status")).toContainText("Replaced “checkout”");
+  await expect(page.locator(".cm-content")).not.toContainText("// local change");
+  expect((await getLibrary(page)).graphs).toHaveLength(2);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.locator(".cm-content")).toContainText("// local change");
+});
+
+test("opening the same link twice switches to the graph without asking", async ({ page }) => {
+  await page.getByRole("button", { name: "Graph: checkout" }).click();
+  await page.getByRole("dialog", { name: "Graphs" }).getByRole("button", { name: "New graph" }).click();
+  await expect(page.getByRole("button", { name: "Graph: Untitled graph" })).toBeVisible();
+  const library = await getLibrary(page);
+  const checkout = library.graphs.find((g) => g.name === "checkout")!;
+  // Build the sample graph's link from the other graph by switching back first.
+  await page.getByRole("button", { name: "Graph: Untitled graph" }).click();
+  await page.getByRole("dialog", { name: "Graphs" }).getByRole("button", { name: /^Open “checkout”/ }).click();
+  const url = await createShareUrl(page);
+  await page.getByRole("button", { name: "Graph: checkout" }).click();
+  await page.getByRole("dialog", { name: "Graphs" }).getByRole("button", { name: /^Open “Untitled graph”/ }).click();
+  await page.goto(url);
+  await expect(page.locator(".status")).toContainText("already had the shared version");
+  await expect(page.getByRole("dialog", { name: "Replace “checkout”?" })).toBeHidden();
+  expect((await getLibrary(page)).activeId).toBe(checkout.id);
+  expect((await getLibrary(page)).graphs).toHaveLength(2);
+});
+
+test("graphs can be renamed, keep their ID, and the name survives a reload", async ({ page }) => {
+  const { activeId } = await getLibrary(page);
+  await page.getByRole("button", { name: "Graph: checkout" }).click();
+  const menu = page.getByRole("dialog", { name: "Graphs" });
+  await expect(menu).toContainText(activeId);
+  const name = menu.getByRole("textbox", { name: "Name" });
+  await name.fill("Checkout architecture");
+  await name.press("Enter");
+  await expect(page.getByRole("button", { name: "Graph: Checkout architecture" })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Graph: Checkout architecture" })).toBeVisible();
+  expect((await getLibrary(page)).activeId).toBe(activeId);
+  // The DOT text keeps its own name, and changing it no longer renames the graph.
+  expect(await getEditorText(page)).toContain("digraph checkout");
+  await replaceDot(page, "digraph billing {\n  a -> b;\n}\n");
+  await page.locator('.graph-canvas [data-node-id="b"]').waitFor();
+  await page.waitForTimeout(300);
+  await expect(page.getByRole("button", { name: "Graph: Checkout architecture" })).toBeVisible();
+});
+
+test("an unnamed graph follows its DOT graph name, which also names the SVG download", async ({ page }) => {
+  await replaceDot(page, "digraph billing {\n  a -> b;\n}\n");
+  await expect(page.getByRole("button", { name: "Graph: billing" })).toBeVisible();
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download SVG" }).click();
+  expect((await download).suggestedFilename()).toBe("billing.svg");
+});
+
+test("text typed right before opening another graph is kept", async ({ page }) => {
+  await page.getByRole("button", { name: "Graph: checkout" }).click();
+  await page.getByRole("dialog", { name: "Graphs" }).getByRole("button", { name: "New graph" }).click();
+  await page.getByRole("button", { name: "Graph: Untitled graph" }).click();
+  await page.getByRole("dialog", { name: "Graphs" }).getByRole("button", { name: /^Open “checkout”/ }).click();
+  await page.locator('.graph-canvas [data-node-id="api"]').waitFor();
+  await page.locator(".cm-content").click();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.type("// typed just now");
+  // Switch away immediately, without waiting for the save debounce.
+  await page.getByRole("button", { name: "Graph: checkout" }).click();
+  await page.getByRole("dialog", { name: "Graphs" }).getByRole("button", { name: /^Open “Untitled graph”/ }).click();
+  await page.getByRole("button", { name: "Graph: Untitled graph" }).click();
+  await page.getByRole("dialog", { name: "Graphs" }).getByRole("button", { name: /^Open “checkout”/ }).click();
+  await expect(page.locator(".cm-content")).toContainText("// typed just now");
+});
+
+test("a graph can be deleted after confirmation; the only graph cannot", async ({ page }) => {
+  await page.getByRole("button", { name: "Graph: checkout" }).click();
+  let menu = page.getByRole("dialog", { name: "Graphs" });
+  await expect(menu.getByRole("button", { name: "Delete “checkout”" })).toBeDisabled();
+  await menu.getByRole("button", { name: "New graph" }).click();
+  await page.getByRole("button", { name: "Graph: Untitled graph" }).click();
+  menu = page.getByRole("dialog", { name: "Graphs" });
+  await menu.getByRole("button", { name: "Delete “Untitled graph”" }).click();
+  const confirm = page.getByRole("dialog", { name: "Delete “Untitled graph”?" });
+  await confirm.getByRole("button", { name: "Delete graph" }).click();
+  await expect(page.getByRole("button", { name: "Graph: checkout" })).toBeVisible();
+  await page.locator('.graph-canvas [data-node-id="api"]').waitFor();
+  expect((await getLibrary(page)).graphs.map((g) => g.name)).toEqual(["checkout"]);
 });
 
 test("the share link is disabled with an explanation when the graph is too big", async ({ page }) => {
@@ -396,4 +563,19 @@ test("the info button shows the version and invites feedback on GitHub", async (
   await expect(dialog.getByRole("status")).toContainText(/latest version|newer version|offline|not available|Could not reach/);
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
+});
+
+test("work saved before graphs had names is kept as the first graph", async ({ page }) => {
+  await page.evaluate(() => {
+    localStorage.clear();
+    const present = { dot: "digraph legacy {\n  old -> work;\n}\n", engine: "hierarchical", positions: {}, routes: {}, manualNodes: [], hasManualChanges: false };
+    localStorage.setItem("graph-shift:session:v1", JSON.stringify({ version: 1, history: { past: [], present, future: [] }, viewport: null, savedAt: 1 }));
+  });
+  await page.reload();
+  await page.locator('.graph-canvas [data-node-id="work"]').waitFor();
+  await expect(page.getByRole("button", { name: "Graph: legacy" })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("graph-shift:session:v1"))).toBeNull();
+  await page.reload();
+  await page.locator('.graph-canvas [data-node-id="work"]').waitFor();
+  expect((await getLibrary(page)).graphs).toHaveLength(1);
 });

@@ -51,6 +51,7 @@ The application provides:
 * **Left Pane:** DOT code editor (monospace textarea or code editor component) with syntax/parse error feedback if the DOT input is malformed.
 * **Right Pane:** Interactive SVG graph viewport with floating or docked canvas controls.
 * **Top / Action Bar:**
+  * **Graph menu:** next to the wordmark, a button with the open graph's name opens the graph library (see 4.11): rename, switch, create and delete graphs.
   * **Initial Layout Selector:** A dropdown with five layouts:
     * *Hierarchical*: layered in edge direction (dagre); honors `rankdir`, `nodesep`, `ranksep`, `minlen`, `weight`, `constraint=false`; edges get routed waypoints.
     * *Force-directed*: d3-force, deterministic, and tuned to avoid edge crossings. Graphs up to 60 nodes are simulated from four starting arrangements (default, DFS circle, two seeded random ones) and the result with the fewest crossings wins. A refinement pass then swaps the positions of nodes on crossing edges, or mirrors a node across the other edge, whenever that lowers the crossing count without causing overlaps. Refinement has a fixed work budget, so large graphs stay fast and results stay identical across machines.
@@ -69,7 +70,7 @@ The application provides:
   * **Share:** opens the share-link panel (see 4.12).
   * **About (ⓘ, far right):** shows the build version and build date, says that everything stays in the browser, links to the source at https://github.com/MartinThoma/graph-shift-app, invites feature requests and bug reports via "Open an issue on GitHub" (`…/issues/new`), and has a "Check for updates" button that reports the result (latest / update downloading / offline / unavailable / unreachable).
 * **Status line:** A status chip at the bottom left of the canvas reports the current mode, the selection, how many nodes are placed by hand, and short-lived notices (e.g. "Fix the DOT error first").
-* **Small screens:** Below 760px the panes become two tabs (*DOT source* / *Graph*), the toolbar becomes a horizontally scrolling row of icon buttons, and touch supports drag, pan and pinch zoom.
+* **Small screens:** Below 760px the panes become two tabs (*DOT source* / *Graph*) and the toolbar wraps into two rows of icon buttons: the graph name, layout and undo/redo on top; add, remove, share, download and about below. The wordmark is hidden there; the graph name takes its place, and the "Placed by hand" state shrinks to a vermilion corner tick on the layout select. Touch supports drag, pan and pinch zoom.
 * **Splitter:** The border between editor and canvas can be dragged (or moved with the arrow keys) to resize the editor; the width is remembered per browser.
 
 ---
@@ -127,14 +128,17 @@ The application provides:
 * Inside the editor, `Ctrl/Cmd+Z` is the editor's own typing undo; everywhere else it is the app undo.
 
 ### 4.7 SVG Export (`Download SVG`)
-* Clicking **Download SVG** serializes the current graph SVG (reflecting manual node positions, updated edge paths, labels, and styling) into a standalone `.svg` file (`xmlns="http://www.w3.org/2000/svg"`) and triggers a browser download (e.g., `graph-shift.svg`).
+* Clicking **Download SVG** serializes the current graph SVG (reflecting manual node positions, updated edge paths, labels, and styling) into a standalone `.svg` file (`xmlns="http://www.w3.org/2000/svg"`) and triggers a browser download named after the graph (e.g. `checkout.svg`; `graph-shift.svg` if the name has no usable characters).
 * Exclude interactive UI overlays/selection handles from the exported SVG so the downloaded file is clean.
 
 ### 4.8 Local Persistence (`localStorage`)
 * Automatically save the current DOT code (and relevant session state such as layout choice and node positions/history if appropriate) to `localStorage`.
 * Restore saved state automatically on page load so refreshes, updates, or browser restarts do not lose work.
-* Saved under `graph-shift:session:v1`: the current snapshot, the last 50 undo and redo steps, and the viewport (pan/zoom). Saving is debounced (400ms) and also happens when the page is hidden or before an update reload. If storage is full, the session is saved without history. Malformed stored data is ignored.
-* A fresh start shows a small sample graph (a checkout service architecture with a cluster, labels and a self-loop).
+* Every graph is saved separately (see 4.11): the index of graphs under `graph-shift:library:v1` (`{activeId, graphs: [{id, name, createdAt, updatedAt}]}`), and each graph's session under `graph-shift:graph:v1:<id>`: the current snapshot, the last 50 undo and redo steps, and the viewport (pan/zoom). Saving is debounced (400ms) and also happens when the page is hidden, before an update reload, and before another graph opens. Only changes since the last save are written. If storage is full, the session is saved without history. Malformed stored data is ignored.
+* Every change to the index re-reads the stored index first, so a graph another tab added (e.g. from a share link) is never dropped; other tabs refresh their graph list when the index changes (each tab keeps its own open graph).
+* **Migration:** a session saved by earlier versions under `graph-shift:session:v1` becomes the first graph (named after its DOT graph name); the old key is removed only after the new keys were written. A tab still running an earlier version may keep saving to the old key after that; on the next start those edits are added as a graph of their own (unless a graph already has exactly that text), so an update never loses work.
+* If storage is full, creating or opening a graph adds nothing and a notice asks to delete a graph first.
+* A fresh start shows a small sample graph (a checkout service architecture with a cluster, labels and a self-loop), named "checkout".
 
 ### 4.9 Selection, Group Moves & Inspector
 * **Click** a node to select it; **Shift+click** adds it to or removes it from the selection. **Ctrl/Cmd+A** selects all nodes; **Esc** or clicking empty sheet clears the selection.
@@ -161,11 +165,24 @@ The application provides:
 * Edge geometry: edges are clipped to the node outline. Parallel edges between the same pair fan out as curves. Self-loops sit on the right side of the node and stack. Routed (hierarchical) edges keep their waypoints, which bend with the endpoints while nodes are dragged.
 * Node sizes are measured from the label text with the bundled fonts (Inter, JetBrains Mono), which are self-hosted.
 
+### 4.11 Multiple Graphs
+* The browser keeps a library of graphs. Each graph has:
+  * an **ID** that never changes: 12 random characters (`0-9a-z`) from `crypto.getRandomValues` (which, unlike `crypto.randomUUID`, also works on plain-HTTP LAN addresses). Share links carry it.
+  * a **name** the user can change (up to 120 characters). Until the user renames it, the name follows the DOT graph name (`digraph checkout` → "checkout"; an anonymous graph is "Untitled graph"), live while typing; a text with a syntax error keeps the last name. Once renamed in the graph menu, the name stays put whatever the DOT text says. Renaming never touches the DOT text. Names are kept unique by appending " 2", " 3", ….
+  * its own DOT text, layout, positions, undo history and viewport.
+* The **graph menu** (the name button next to the wordmark) shows the open graph's name field (Enter or leaving the field renames; Esc or a blank name keeps the old one), its ID, and every graph in this browser, most recently edited first, with when it was last edited. Clicking a graph opens it; **New graph** creates an empty `digraph {}` named "Untitled graph"; the trash button deletes a graph after a confirmation ("Delete graph" / "Keep it"). The only graph cannot be deleted. Deleting the open graph opens the most recently edited remaining one.
+* Opening another graph saves the open one first. Selection, mode, popovers and the editor reset; the viewport is the graph's own.
+* "Last edited" changes with edits (history changes), not with opening, panning or zooming.
+
 ### 4.12 Share Links
-* **Share** creates a link that contains the whole graph: the DOT text, the layout and its options, and, if nodes were placed by hand, all positions, edge routes and which nodes were placed by hand.
+* **Share** creates a link that contains the whole graph: its ID and name, the DOT text, the layout and its options, and, if nodes were placed by hand, all positions, edge routes and which nodes were placed by hand.
 * The data is JSON, compressed with the browser's built-in `deflate-raw` (`CompressionStream`) and base64url-encoded into the URL fragment: `<app URL>#share=v1.<data>`. Fragments are never sent to a server, so sharing uploads nothing.
 * Links are limited to 8,000 characters (longer URLs break in chat apps, mail clients and some browsers). If the link with positions is too long, a link without positions is offered instead (the recipient gets a fresh layout) and the panel says so. If even that is too long, the link field and "Copy link" are disabled, an explanation shows the size and the limit, and "Copy DOT text" is offered instead.
-* Opening a share link (on load or when the fragment changes) loads the graph as a new undo step, so the previous work is one undo away, shows a notice, and removes the fragment from the address bar. Malformed links show a notice and change nothing. Shared data is validated (types, sizes) before use.
+* Opening a share link (on load or when the fragment changes) removes the fragment from the address bar, shows a notice, and never changes the graph that was open:
+  * **New graph:** if this browser has no graph with the link's ID (or the link has none), the shared graph is added to the library with the link's ID and name (made unique if another graph has that name) and opened. If the sender never renamed it, it keeps following its DOT graph name.
+  * **Same graph, same content:** if a graph with that ID exists and has the same DOT text, layout settings and (rounded) hand-placed positions, it is simply opened.
+  * **Same graph, different content:** a confirmation asks "Replace “name”?" with three choices: **Replace mine** (the graph's content becomes the shared one as a new undo step in that graph, so undo brings the local version back; its local name is kept), **Keep both** (the shared version is added as a separate graph with a new ID), and **Cancel** (nothing changes).
+* Malformed links show a notice and change nothing. Shared data is validated (types, sizes, ID characters, name length) before use.
 
 ### 4.13 Keyboard
 * `Ctrl/Cmd+Z` undo, `Ctrl/Cmd+Shift+Z` or `Ctrl/Cmd+Y` redo (outside the editor), `Ctrl/Cmd+A` select all nodes, `Delete`/`Backspace` remove the selection, `Esc` cancels add-edge mode or clears the selection, arrow keys nudge the selected nodes, `V` / `H` switch between the Select and Pan tools, Space+drag pans.
@@ -198,16 +215,16 @@ The application provides:
         ├── render/     colors.ts, text.ts, shapes.ts, visuals.ts, svgMarkup.ts
         ├── canvas/     GraphCanvas.tsx, scene.ts, edgeGeometry.ts
         ├── editor/     DotEditor.tsx, dotLanguage.ts
-        ├── state/      store.ts, history.ts, storage.ts
+        ├── state/      store.ts, history.ts, storage.ts, library.ts (graph library, IDs, migration)
         ├── export/     exportSvg.ts
         ├── pwa/        sw.ts, swLogic.ts, autoUpdate.ts
         ├── share/      shareLink.ts
         └── ui/         icons.tsx, ConfirmDialog.tsx, AddNodePopover.tsx, LayoutOptionsPopover.tsx, NodeInspector.tsx,
-                        SharePopover.tsx, AboutPopover.tsx, useDismiss.ts
+                        SharePopover.tsx, AboutPopover.tsx, GraphMenu.tsx, useDismiss.ts
 
 * The canvas and the SVG export render the same scene through the same markup functions (`render/svgMarkup.ts`); overlays (grid, selection, hand-placed ticks, edge preview) are drawn separately and never exported.
 * **Automated Checks:**
-  * `npm test` (Vitest): DOT parsing and model building, write-back for add/remove of nodes and edges (chains, subgraph operands, clusters, self-loops, quoted IDs), edge geometry on node move, layouts (determinism, no overlaps, clusters kept together), the store (drag, undo/redo, manual lock, placement, persistence), service-worker precache/update decisions under stale responses, and SVG export.
+  * `npm test` (Vitest): DOT parsing and model building, write-back for add/remove of nodes and edges (chains, subgraph operands, clusters, self-loops, quoted IDs), edge geometry on node move, layouts (determinism, no overlaps, clusters kept together), the store (drag, undo/redo, manual lock, placement, persistence), the graph library (migration, IDs, names, cross-tab safe index updates, share-link decisions), service-worker precache/update decisions under stale responses, and SVG export.
   * `npm run build`: typecheck, Vite build, then `scripts/check-build.mjs` verifies content-hashed assets, one version across `index.html`/`sw.js`/`version.json`, a precache list equal to the build output, and no external hosts.
-  * `npm run test:e2e` (Playwright, installed Chrome): drag without write-back, gated layout switch, add/remove write-back, undo/redo, syntax errors, reload persistence, SVG download, offline use, and the update prompt.
+  * `npm run test:e2e` (Playwright, installed Chrome): drag without write-back, gated layout switch, add/remove write-back, undo/redo, syntax errors, reload persistence, SVG download, offline use, the update prompt, share links (new graph, same graph, replace/keep both/cancel), renaming, deleting, and migration of old saves.
 * **Deployment:** `.github/workflows/deploy.yml` builds, tests and publishes `dist/` to GitHub Pages.
