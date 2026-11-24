@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-24T12:24:20+00:00",
+  "generatedAt": "2026-11-24T18:25:33+00:00",
   "title": "Design System: Graph Shift",
   "extensions": {
     "colorMeta": {
@@ -395,6 +395,10 @@
       {
         "name": "compact",
         "value": "760px"
+      },
+      {
+        "name": "narrow",
+        "value": "374px"
       }
     ],
     "graph": {
@@ -476,6 +480,22 @@
       "description": "Signature: ink node on the gridded sheet with the vermilion hand tick and a small-tip ink edge.",
       "html": "<svg class=\"ds-sheet\" width=\"220\" height=\"120\" viewBox=\"0 0 220 120\"><defs><pattern id=\"ds-gmin\" width=\"20\" height=\"20\" patternUnits=\"userSpaceOnUse\"><path d=\"M20 0H0V20\" fill=\"none\" stroke=\"var(--grid-minor)\"/></pattern><pattern id=\"ds-gmaj\" width=\"100\" height=\"100\" patternUnits=\"userSpaceOnUse\"><path d=\"M100 0H0V100\" fill=\"none\" stroke=\"var(--grid-major)\"/></pattern></defs><rect width=\"220\" height=\"120\" fill=\"var(--paper)\"/><rect width=\"220\" height=\"120\" fill=\"url(#ds-gmin)\"/><rect width=\"220\" height=\"120\" fill=\"url(#ds-gmaj)\"/><path d=\"M84 60H140\" stroke=\"var(--ink)\" stroke-width=\"1.1\" fill=\"none\"/><path d=\"M147.5 60L140 57.1L140 62.9Z\" fill=\"var(--ink)\"/><rect x=\"30\" y=\"46\" width=\"54\" height=\"28\" rx=\"6\" fill=\"#fff\" stroke=\"var(--ink)\" stroke-width=\"1.1\"/><text x=\"57\" y=\"64.5\" text-anchor=\"middle\" font-size=\"14\" fill=\"var(--ink)\">Mailer</text><path class=\"ds-hand-tick\" d=\"M24 50V40H34\"/><rect x=\"148\" y=\"46\" width=\"54\" height=\"28\" rx=\"6\" fill=\"#fff\" stroke=\"var(--ink)\" stroke-width=\"1.1\"/><text x=\"175\" y=\"64.5\" text-anchor=\"middle\" font-size=\"14\" fill=\"var(--ink)\">Queue</text></svg>",
       "css": ".ds-sheet { font-family: var(--font-ui); border: 1px solid var(--ink); } .ds-hand-tick { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: square; }"
+    },
+    {
+      "name": "Graph-name Button",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "The open graph's name beside the wordmark; opens the graph library. Ellipsizes long names.",
+      "html": "<button class=\"ds-graph-toggle\" aria-haspopup=\"dialog\"><span class=\"ds-graph-toggle-name\">Payment service dependencies</span><svg width=\"12\" height=\"12\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 6l4 4 4-4\"/></svg></button>",
+      "css": ".ds-graph-toggle { display: inline-flex; align-items: center; gap: 6px; max-width: 240px; height: 30px; padding: 0 10px; font-family: var(--font-ui); font-size: 13px; font-weight: 600; color: var(--ink); background: var(--white); border: 1px solid var(--control); border-radius: var(--radius); cursor: pointer; transition: background-color 120ms var(--ease-out), border-color 120ms var(--ease-out); } .ds-graph-toggle:hover { background: var(--control-hover); border-color: var(--ink-2); } .ds-graph-toggle[aria-expanded='true'] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); } .ds-graph-toggle:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; } .ds-graph-toggle-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-graph-toggle svg { flex: none; color: var(--muted); }"
+    },
+    {
+      "name": "Graph List",
+      "kind": "custom",
+      "refersTo": "popover",
+      "description": "Rows of the graph library: the open graph on Paper at 600 with 'open'; others show a Graphite edited time and a ghost trash button that turns Deep Brick on hover.",
+      "html": "<ul class=\"ds-graph-list\"><li class=\"ds-graph-row\" aria-current=\"true\"><button class=\"ds-graph-open\"><span class=\"ds-graph-name\">checkout</span><span class=\"ds-graph-time\">open</span></button><button class=\"ds-graph-delete\" aria-label=\"Delete\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M2.5 4.5h11M6.5 4.5V2.8h3v1.7\"/><path d=\"M4 4.5l.7 9h6.6l.7-9\"/><path d=\"M6.7 7v4M9.3 7v4\"/></svg></button></li><li class=\"ds-graph-row\"><button class=\"ds-graph-open\"><span class=\"ds-graph-name\">roadmap</span><span class=\"ds-graph-time\">5 minutes ago</span></button><button class=\"ds-graph-delete\" aria-label=\"Delete\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M2.5 4.5h11M6.5 4.5V2.8h3v1.7\"/><path d=\"M4 4.5l.7 9h6.6l.7-9\"/><path d=\"M6.7 7v4M9.3 7v4\"/></svg></button></li></ul>",
+      "css": ".ds-graph-list { list-style: none; margin: 0; padding: 0; width: 300px; display: grid; gap: 2px; font-family: var(--font-ui); font-size: 13px; } .ds-graph-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px; padding-right: 6px; border-radius: var(--radius); } .ds-graph-row:hover { background: var(--control-hover); } .ds-graph-row[aria-current='true'] { background: var(--paper); box-shadow: inset 0 0 0 1px var(--hair); } .ds-graph-open { display: flex; align-items: baseline; gap: 10px; min-width: 0; height: 34px; padding: 0 6px; border: none; background: none; font: inherit; color: var(--ink); text-align: left; cursor: pointer; } .ds-graph-row[aria-current='true'] .ds-graph-open { font-weight: 600; cursor: default; } .ds-graph-open:focus-visible, .ds-graph-delete:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; } .ds-graph-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-graph-time { color: var(--muted); font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; } .ds-graph-delete { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 1px solid transparent; border-radius: var(--radius); background: transparent; color: var(--muted); cursor: pointer; } .ds-graph-delete:hover { color: var(--danger-text); border-color: var(--control); background: var(--white); }"
     }
   ],
   "narrative": {

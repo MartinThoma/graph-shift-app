@@ -1,5 +1,41 @@
 # Specification: `graph-shift-app`
 
+<!-- impeccable:product-schema 1 -->
+
+The sections up to "1. Overview & Goals" are the durable product record (who it is for and why). The numbered sections after them are the feature specification.
+
+## Platform
+
+web
+
+## Users
+Engineers tidying diagrams: they have (or write) a graph in DOT and want a picture that reads well, arranged to their own idea rather than to whatever an automatic layout produced.
+
+## Product Purpose
+Graph Shift turns DOT text into a drawing the user can rearrange by hand, then exports it as a clean SVG or shares it as a link. Success is a diagram the engineer is happy to put in front of other people, made without fighting a layout engine and without uploading anything.
+
+## Positioning
+Write DOT, then arrange the drawing by hand: no Graphviz, layouts never move what you placed without asking, dragging never rewrites your DOT, and nothing leaves the browser.
+
+## Operating Context
+* The finished diagrams end up in **repository docs and READMEs** (SVGs committed next to code), in **slides and talks** (where the picture has to read at a glance), and in **share links** sent to colleagues to look at or adjust.
+* Work happens in the browser at a desk, as an installed offline PWA or on GitHub Pages; phones are a secondary, viewing-and-small-fixes context.
+
+## Evidence on Hand
+None yet: there are no testimonials, user numbers, case studies or press. Future work must not claim or invent any. The only proof is the app itself and its source at https://github.com/MartinThoma/graph-shift-app.
+
+## Product Principles
+1. **The hand wins.** What the user placed stays where it is; any automatic layout that would move it asks first and can be undone.
+2. **The DOT text is the user's.** Dragging never touches it; edits made on the canvas change it surgically, keeping comments and formatting.
+3. **Nothing leaves the browser.** No server, no upload, no runtime network; sharing works through the URL fragment.
+4. **Never lose work.** Saves are automatic and per graph; replacing or deleting anything asks first; updates and migrations keep everything.
+5. **A good picture over Graphviz fidelity.** The drawing should look good and be adjustable; matching Graphviz output is not a goal.
+
+## Accessibility & Inclusion
+No formal standard is required. The current care stays: text contrast of at least 4.5:1, every action reachable by keyboard with visible focus, keyboard shortcuts for the frequent actions, and reduced motion honoured.
+
+---
+
 ## 1. Overview & Goals
 `graph-shift-app` is a purely client-side, offline-capable single-page web application designed for static hosting on **GitHub Pages** and installation as a Progressive Web App (PWA) so it works offline without any backend server.
 
