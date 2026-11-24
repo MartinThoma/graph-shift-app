@@ -13,6 +13,9 @@ The full specification is in [PRODUCT.md](PRODUCT.md), the visual design in [DES
 ## Development
 
 ```sh
+make run           # build and serve on all interfaces; prints the local URLs (PORT=4173 by default)
+make dev           # dev server with hot reload
+
 npm install
 npm run dev        # dev server (no service worker)
 npm test           # unit tests (Vitest)
