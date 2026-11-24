@@ -3,13 +3,14 @@ import { computeFitViewport, GraphCanvas, zoomViewportAt, type PointerTool, type
 import { SceneBuilder } from "./canvas/scene";
 import { DotEditor, type DotEditorHandle } from "./editor/DotEditor";
 import { createExportFilename, createSvgExport, downloadSvg } from "./export/exportSvg";
-import { LAYOUT_ENGINES, type LayoutEngine } from "./layout/initialLayout";
+import { findIsolatedNodes, LAYOUT_ENGINES, type LayoutEngine } from "./layout/initialLayout";
 import { startAutoUpdate, type AutoUpdateController } from "./pwa/autoUpdate";
 import type { Point } from "./render/shapes";
 import { loadSession, saveSession, type Viewport } from "./state/storage";
 import { GraphStore } from "./state/store";
 import { AddNodePopover } from "./ui/AddNodePopover";
 import { ConfirmDialog } from "./ui/ConfirmDialog";
+import { LayoutOptionsPopover } from "./ui/LayoutOptionsPopover";
 import { NodeInspector } from "./ui/NodeInspector";
 import {
   AddEdgeIcon,
@@ -22,6 +23,7 @@ import {
   HandTick,
   InstallIcon,
   MarqueeIcon,
+  OptionsIcon,
   RedoIcon,
   RemoveEdgeIcon,
   RemoveNodeIcon,
@@ -39,7 +41,8 @@ const COARSE_POINTER = typeof matchMedia !== "undefined" && matchMedia("(pointer
 
 interface PendingLayout {
   engine: LayoutEngine;
-  reason: "engine" | "reset";
+  reason: "engine" | "reset" | "isolated";
+  groupIsolated?: boolean;
 }
 
 interface BeforeInstallPromptEvent extends Event {
@@ -86,6 +89,7 @@ export function App() {
   const [edgeSource, setEdgeSource] = useState<string | null>(null);
   const [pendingLayout, setPendingLayout] = useState<PendingLayout | null>(null);
   const [addNodeOpen, setAddNodeOpen] = useState(false);
+  const [layoutOptionsOpen, setLayoutOptionsOpen] = useState(false);
   const [suggestedId, setSuggestedId] = useState("n1");
   const [notice, setNotice] = useState<string | null>(null);
   const [updateReady, setUpdateReady] = useState(false);
@@ -268,6 +272,7 @@ export function App() {
 
   const applyLayout = (layout: PendingLayout): void => {
     if (layout.reason === "engine") store.setEngine(layout.engine);
+    else if (layout.reason === "isolated") store.setGroupIsolated(layout.groupIsolated ?? true);
     else store.resetLayout();
     fitRequested.current = true;
   };
@@ -299,6 +304,14 @@ export function App() {
     for (const id of ids) if (current[id]) moves[id] = { x: current[id].x + dx, y: current[id].y + dy };
     store.dragNodes(moves);
     store.commitDrag(Object.keys(moves));
+  };
+
+  const handleArrange = (engine: LayoutEngine): void => {
+    if (selection?.kind !== "nodes") return;
+    if (store.layoutSelection(selection.ids, engine)) {
+      const label = LAYOUT_ENGINES.find((e) => e.id === engine)?.label ?? engine;
+      setNotice(`Arranged ${selection.ids.length} nodes with ${label}. Undo puts them back.`);
+    }
   };
 
   const handleInspectorChange = (changes: Record<string, string | null>): void => {
@@ -495,6 +508,26 @@ export function App() {
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            className="btn icon-only"
+            data-layout-options-toggle
+            aria-expanded={layoutOptionsOpen}
+            aria-haspopup="dialog"
+            aria-label="Layout options"
+            title="Layout options"
+            onClick={() => setLayoutOptionsOpen((open) => !open)}
+          >
+            <OptionsIcon />
+          </button>
+          {layoutOptionsOpen && (
+            <LayoutOptionsPopover
+              groupIsolated={present.groupIsolated ?? true}
+              isolatedCount={model ? findIsolatedNodes(model).length : 0}
+              onChangeGroupIsolated={(value) => requestLayout({ engine: present.engine, reason: "isolated", groupIsolated: value })}
+              onClose={() => setLayoutOptionsOpen(false)}
+            />
+          )}
           {present.hasManualChanges && (
             <span className="lock-state" title="Layouts will not move your nodes without asking">
               <HandTick />
@@ -678,7 +711,13 @@ export function App() {
             {notice ?? status}
           </div>
           {selection?.kind === "nodes" && mode === "select" && model && (
-            <NodeInspector model={model} ids={selection.ids} onChange={handleInspectorChange} onClose={() => setSelection(null)} />
+            <NodeInspector
+              model={model}
+              ids={selection.ids}
+              onChange={handleInspectorChange}
+              onArrange={handleArrange}
+              onClose={() => setSelection(null)}
+            />
           )}
           <div className="zoom-controls" role="group" aria-label="View">
             <div className="tool-toggle" role="group" aria-label="Drag on the sheet">
@@ -745,7 +784,12 @@ export function App() {
           setPendingLayout(null);
         }}
       >
-        {pendingLayout?.reason === "engine" ? (
+        {pendingLayout?.reason === "isolated" ? (
+          <p>
+            {pendingLayout.groupIsolated ? "Collecting unconnected nodes in a grid" : "Laying out unconnected nodes with the rest"} lays out the whole
+            graph again, so the {handCount} {handCount === 1 ? "node" : "nodes"} you placed by hand will move. You can undo this.
+          </p>
+        ) : pendingLayout?.reason === "engine" ? (
           <p>
             Switching to <b>{pendingEngineLabel}</b> lays out the whole graph again, so the {handCount} {handCount === 1 ? "node" : "nodes"} you placed by
             hand will move. You can undo this.

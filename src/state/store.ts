@@ -13,7 +13,7 @@ import {
   removeNodeFromDot,
   setNodeAttributesInDot,
 } from "../dot/serializer";
-import { computeLayout, type EdgeRoute, type LayoutEngine, type Size } from "../layout/initialLayout";
+import { computeLayout, computeSelectionLayout, type EdgeRoute, type LayoutEngine, type Size } from "../layout/initialLayout";
 import { placeNewNodes } from "../layout/placement";
 import { computeGraphVisuals, type GraphVisuals } from "../canvas/scene";
 import type { Point } from "../render/shapes";
@@ -40,6 +40,8 @@ export interface DocState {
   manualNodes: string[];
   /** Once true, layouts never overwrite positions without explicit confirmation. */
   hasManualChanges: boolean;
+  /** Lay out unconnected nodes as a grid block next to the graph (undefined = true). */
+  groupIsolated?: boolean;
 }
 
 export interface DotError {
@@ -219,22 +221,22 @@ export class GraphStore {
     dot: string,
     model: GraphModel,
     visuals: GraphVisuals,
-    options: { forceLayout?: boolean; engine?: LayoutEngine; explicit?: Record<string, Point> } = {},
+    options: { forceLayout?: boolean; engine?: LayoutEngine; explicit?: Record<string, Point>; groupIsolated?: boolean } = {},
   ): DocState {
     const engine = options.engine ?? previous.engine;
+    const groupIsolated = options.groupIsolated ?? previous.groupIsolated ?? true;
     const sizes = collectSizes(visuals);
     const explicit = options.explicit ?? {};
     const hasExplicit = Object.keys(explicit).length > 0;
     const keepPositions = (previous.hasManualChanges || hasExplicit) && !options.forceLayout;
 
     if (!keepPositions) {
-      const result = computeLayout(engine, {
-        model,
-        sizes,
-        edgeLabelSizes: collectEdgeLabelSizes(visuals),
-        rankdir: visuals.graph.rankdir,
-      });
-      return { dot, engine, positions: result.positions, routes: result.routes, manualNodes: [], hasManualChanges: false };
+      const result = computeLayout(
+        engine,
+        { model, sizes, edgeLabelSizes: collectEdgeLabelSizes(visuals), rankdir: visuals.graph.rankdir },
+        { groupIsolated },
+      );
+      return { dot, engine, positions: result.positions, routes: result.routes, manualNodes: [], hasManualChanges: false, groupIsolated };
     }
 
     const positions: Record<string, Point> = {};
@@ -261,7 +263,7 @@ export class GraphStore {
     const edgeKeys = new Set(model.edges.map((e) => e.key));
     for (const [key, route] of Object.entries(previous.routes)) if (edgeKeys.has(key)) routes[key] = route;
     const manualNodes = [...new Set([...previous.manualNodes, ...Object.keys(explicit)])].filter((id) => model.nodes.has(id));
-    return { dot, engine, positions, routes, manualNodes, hasManualChanges: true };
+    return { dot, engine, positions, routes, manualNodes, hasManualChanges: true, groupIsolated };
   }
 
   /** Recompute the model for the present snapshot without changing positions. */
@@ -505,14 +507,58 @@ export class GraphStore {
     this.applyLayout(this.present.engine);
   }
 
-  private applyLayout(engine: LayoutEngine): void {
+  /**
+   * Turn the grid block for unconnected nodes on or off and lay out again.
+   * While manual changes exist this must only be called after confirmation.
+   */
+  setGroupIsolated(groupIsolated: boolean): void {
+    this.applyLayout(this.present.engine, groupIsolated);
+  }
+
+  /**
+   * Lay out only the given nodes with an engine, centered where they are now.
+   * Every other node keeps its position; the moved nodes count as placed by hand.
+   */
+  layoutSelection(ids: string[], engine: LayoutEngine): boolean {
+    this.flush();
+    const { model, visuals } = this.state;
+    if (!model || !visuals) return false;
+    const selected = ids.filter((id) => model.nodes.has(id));
+    if (selected.length < 2) return false;
+    const result = computeSelectionLayout(
+      engine,
+      { model, sizes: collectSizes(visuals), edgeLabelSizes: collectEdgeLabelSizes(visuals), rankdir: visuals.graph.rankdir },
+      selected,
+      this.present.positions,
+      { groupIsolated: this.present.groupIsolated ?? true },
+    );
+    const inside = new Set(selected);
+    const routes: Record<string, EdgeRoute> = {};
+    for (const edge of model.edges) {
+      const touches = inside.has(edge.tail) || inside.has(edge.head);
+      const route = touches ? result.routes[edge.key] : this.present.routes[edge.key];
+      if (route) routes[edge.key] = route;
+    }
+    const next: DocState = {
+      ...this.present,
+      positions: { ...this.present.positions, ...result.positions },
+      routes,
+      manualNodes: [...new Set([...this.present.manualNodes, ...selected])],
+      hasManualChanges: true,
+    };
+    this.resetCoalescing();
+    this.setState({ history: pushHistory(this.state.history, next), dragPositions: null });
+    return true;
+  }
+
+  private applyLayout(engine: LayoutEngine, groupIsolated?: boolean): void {
     this.flush();
     const { model, visuals } = this.state;
     if (!model || !visuals) {
-      this.setState({ history: pushHistory(this.state.history, { ...this.present, engine }) });
+      this.setState({ history: pushHistory(this.state.history, { ...this.present, engine, groupIsolated: groupIsolated ?? this.present.groupIsolated }) });
       return;
     }
-    const next = this.reconcile(this.present, this.present.dot, model, visuals, { forceLayout: true, engine });
+    const next = this.reconcile(this.present, this.present.dot, model, visuals, { forceLayout: true, engine, groupIsolated });
     this.resetCoalescing();
     this.setState({ history: pushHistory(this.state.history, next), dragPositions: null });
   }

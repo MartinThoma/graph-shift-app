@@ -7,9 +7,9 @@
  *   grid         -> compact grid in flow (topological) order
  */
 import { graphlib, layout as runDagre } from "@dagrejs/dagre";
-import { forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY } from "d3-force";
 import type { GraphModel } from "../dot/model";
 import type { Point } from "../render/shapes";
+import { computeForceLayout } from "./forceLayout";
 
 export type LayoutEngine = "hierarchical" | "force" | "radial" | "circular" | "grid";
 
@@ -52,7 +52,135 @@ export interface LayoutResult {
 const CLUSTER_PREFIX = "\u0001cluster:";
 
 /** Run the selected layout engine. */
-export function computeLayout(engine: LayoutEngine, input: LayoutInput): LayoutResult {
+export interface LayoutOptions {
+  /** Lay out unconnected nodes as a separate grid block next to the graph (default true). */
+  groupIsolated?: boolean;
+}
+
+/**
+ * Nodes not connected to any other node (self-loops do not count) and not
+ * inside a cluster.
+ */
+export function findIsolatedNodes(model: GraphModel): string[] {
+  const connected = new Set<string>();
+  for (const edge of model.edges) {
+    if (edge.tail === edge.head) continue;
+    connected.add(edge.tail);
+    connected.add(edge.head);
+  }
+  return [...model.nodes.values()].filter((n) => !connected.has(n.id) && n.cluster === null).map((n) => n.id);
+}
+
+const ISOLATED_GAP = 60;
+const ISOLATED_CELL_PADDING = 24;
+
+/**
+ * Place unconnected nodes in a grid that completes the drawing's rectangle:
+ * below a wide drawing (stretched to its width) or beside a tall one
+ * (stretched to its height). Without a drawing, the grid is roughly square.
+ */
+export function placeIsolatedGrid(
+  ids: string[],
+  sizes: Map<string, Size>,
+  main: { width: number; height: number } | null,
+): Record<string, Point> {
+  const cellW = Math.max(...ids.map((id) => sizes.get(id)!.width)) + ISOLATED_CELL_PADDING;
+  const cellH = Math.max(...ids.map((id) => sizes.get(id)!.height)) + ISOLATED_CELL_PADDING;
+  const n = ids.length;
+  const out: Record<string, Point> = {};
+  if (!main || main.width <= 0) {
+    const columns = Math.max(1, Math.ceil(Math.sqrt(n * 1.4)));
+    ids.forEach((id, i) => (out[id] = { x: (i % columns) * cellW + cellW / 2, y: Math.floor(i / columns) * cellH + cellH / 2 }));
+    return out;
+  }
+  if (main.width >= main.height) {
+    const columns = Math.max(1, Math.min(n, Math.floor((main.width + ISOLATED_CELL_PADDING) / cellW)));
+    const stepX = columns > 1 ? Math.max(cellW, main.width / columns) : cellW;
+    const top = main.height + ISOLATED_GAP;
+    ids.forEach((id, i) => (out[id] = { x: (i % columns) * stepX + stepX / 2, y: top + Math.floor(i / columns) * cellH + cellH / 2 }));
+  } else {
+    const rows = Math.max(1, Math.min(n, Math.floor((main.height + ISOLATED_CELL_PADDING) / cellH)));
+    const stepY = rows > 1 ? Math.max(cellH, main.height / rows) : cellH;
+    const left = main.width + ISOLATED_GAP;
+    ids.forEach((id, i) => (out[id] = { x: left + Math.floor(i / rows) * cellW + cellW / 2, y: (i % rows) * stepY + stepY / 2 }));
+  }
+  return out;
+}
+
+/** Bounding box size of a normalized layout (which starts at 0,0). */
+function measureLayout(result: LayoutResult, sizes: Map<string, Size>): { width: number; height: number } {
+  let width = 0;
+  let height = 0;
+  for (const [id, p] of Object.entries(result.positions)) {
+    const s = sizes.get(id)!;
+    width = Math.max(width, p.x + s.width / 2);
+    height = Math.max(height, p.y + s.height / 2);
+  }
+  for (const r of Object.values(result.routes)) {
+    for (const p of r.points) {
+      width = Math.max(width, p.x);
+      height = Math.max(height, p.y);
+    }
+  }
+  return { width, height };
+}
+
+export function computeLayout(engine: LayoutEngine, input: LayoutInput, options: LayoutOptions = {}): LayoutResult {
+  const isolated = options.groupIsolated === false ? [] : findIsolatedNodes(input.model);
+  if (isolated.length === 0) return computeEngineLayout(engine, input);
+  if (isolated.length === input.model.nodes.size) {
+    return normalizeLayout({ positions: placeIsolatedGrid(isolated, input.sizes, null), routes: {} }, input.sizes);
+  }
+  const isolatedSet = new Set(isolated);
+  const rest = [...input.model.nodes.keys()].filter((id) => !isolatedSet.has(id));
+  const main = computeEngineLayout(engine, { ...input, model: createSubModel(input.model, rest) });
+  const grid = placeIsolatedGrid(isolated, input.sizes, measureLayout(main, input.sizes));
+  return normalizeLayout({ positions: { ...main.positions, ...grid }, routes: main.routes }, input.sizes);
+}
+
+/**
+ * Lay out only the given nodes (and the edges between them) and center the
+ * result where those nodes currently are. Returns the new positions and routes
+ * for those nodes only.
+ */
+export function computeSelectionLayout(
+  engine: LayoutEngine,
+  input: LayoutInput,
+  ids: string[],
+  current: Record<string, Point>,
+  options: LayoutOptions = {},
+): LayoutResult {
+  const sub = createSubModel(input.model, ids);
+  const result = computeLayout(engine, { ...input, model: sub }, options);
+  const box = (positions: Record<string, Point>) => {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const id of ids) {
+      const p = positions[id];
+      if (!p) continue;
+      const s = input.sizes.get(id)!;
+      minX = Math.min(minX, p.x - s.width / 2);
+      maxX = Math.max(maxX, p.x + s.width / 2);
+      minY = Math.min(minY, p.y - s.height / 2);
+      maxY = Math.max(maxY, p.y + s.height / 2);
+    }
+    return { cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 };
+  };
+  const before = box(current);
+  const after = box(result.positions);
+  const dx = Math.round(before.cx - after.cx);
+  const dy = Math.round(before.cy - after.cy);
+  const shift = (p: Point): Point => ({ x: p.x + dx, y: p.y + dy });
+  const positions: Record<string, Point> = {};
+  for (const id of ids) positions[id] = shift(result.positions[id]);
+  const routes: Record<string, EdgeRoute> = {};
+  for (const [key, r] of Object.entries(result.routes)) routes[key] = { points: r.points.map(shift), tail: shift(r.tail), head: shift(r.head) };
+  return { positions, routes };
+}
+
+function computeEngineLayout(engine: LayoutEngine, input: LayoutInput): LayoutResult {
   let result: LayoutResult;
   switch (engine) {
     case "hierarchical":
@@ -70,8 +198,8 @@ const GROUP_PREFIX = "\u0001group:";
 const GROUP_PADDING = 14;
 const GROUP_LABEL_SPACE = 22;
 
-/** Build a model restricted to some nodes (edges between them, clusters below `parent`). */
-function createSubModel(model: GraphModel, ids: string[]): GraphModel {
+/** Build a model restricted to some nodes (edges between them, clusters fully inside). */
+export function createSubModel(model: GraphModel, ids: string[]): GraphModel {
   const set = new Set(ids);
   const clusters = new Map(
     [...model.clusters].filter(([, c]) => c.nodeIds.some((id) => set.has(id)) && c.nodeIds.every((id) => set.has(id))),
@@ -259,7 +387,7 @@ function computeHierarchicalLayout(input: LayoutInput): LayoutResult {
 }
 
 const FLAT_ENGINES: Record<Exclude<LayoutEngine, "hierarchical">, FlatEngine> = {
-  force: (input) => computeForceLayout(input),
+  force: (input) => computeForceLayout({ model: input.model, sizes: input.sizes }),
   radial: (input) => computeRadialLayout(input),
   circular: (input) => computeCircularLayout(input),
   grid: (input) => computeGridLayout(input),
@@ -272,54 +400,8 @@ function checkCollinear(a: Point, b: Point, c: Point): boolean {
 
 /* ------------------------------------------------------------------------ */
 
-function createSeededRandom(seed: number): () => number {
-  let state = seed >>> 0;
-  return () => {
-    state = (state * 1664525 + 1013904223) >>> 0;
-    return state / 4294967296;
-  };
-}
-
 function getRadius(size: Size): number {
   return Math.hypot(size.width, size.height) / 2;
-}
-
-function computeForceLayout(input: LayoutInput): Record<string, Point> {
-  const { model, sizes } = input;
-  interface SimNode {
-    id: string;
-    r: number;
-    x?: number;
-    y?: number;
-  }
-  const nodes: SimNode[] = [...model.nodes.keys()].map((id) => ({ id, r: getRadius(sizes.get(id)!) }));
-  const seen = new Set<string>();
-  const links: { source: string; target: string }[] = [];
-  for (const edge of model.edges) {
-    if (edge.tail === edge.head) continue;
-    const key = [edge.tail, edge.head].sort().join("\u0000");
-    if (seen.has(key)) continue;
-    seen.add(key);
-    links.push({ source: edge.tail, target: edge.head });
-  }
-  const simulation = forceSimulation(nodes)
-    .randomSource(createSeededRandom(42))
-    .force(
-      "link",
-      forceLink<SimNode, { source: string | SimNode; target: string | SimNode }>(links)
-        .id((d) => d.id)
-        .distance((l) => 50 + (l.source as SimNode).r + (l.target as SimNode).r),
-    )
-    .force("charge", forceManyBody<SimNode>().strength(-420))
-    .force("collide", forceCollide<SimNode>((d) => d.r + 10).iterations(2))
-    .force("x", forceX<SimNode>(0).strength(0.06))
-    .force("y", forceY<SimNode>(0).strength(0.06))
-    .stop();
-  const ticks = Math.min(500, 200 + nodes.length * 2);
-  for (let i = 0; i < ticks; i++) simulation.tick();
-  const positions: Record<string, Point> = {};
-  for (const n of nodes) positions[n.id] = { x: n.x ?? 0, y: n.y ?? 0 };
-  return positions;
 }
 
 /* ------------------------------------------------------------------------ */

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildGraphModel } from "../dot/model";
-import { computeLayout, type LayoutEngine } from "../layout/initialLayout";
+import { computeLayout, computeSelectionLayout, findIsolatedNodes, type LayoutEngine } from "../layout/initialLayout";
+import { collectLinks, countEdgeCrossings, reduceCrossings } from "../layout/forceLayout";
 import { createOutline } from "../render/shapes";
 import { estimateTextWidth } from "../render/text";
 import { computeEdgeGeometry, deformRoute, type NodeGeometry } from "./edgeGeometry";
@@ -207,5 +208,66 @@ describe("Inspector colors", () => {
     // (Named colors are converted through a canvas, which the test DOM lacks; hex covers the logic.)
     const model = buildGraphModel('digraph { bgcolor="#fff"; a [color="#f00", fillcolor="#00ff00"]; a -> b [color="#FF0000"]; subgraph cluster_x { bgcolor="#123456"; b } }');
     expect(collectGraphColors(model)).toEqual(["#ffffff", "#ff0000", "#00ff00", "#123456"]);
+  });
+});
+
+describe("Layout control", () => {
+  function createInput(dot: string) {
+    const model = buildGraphModel(dot);
+    const visuals = computeGraphVisuals(model, estimateTextWidth);
+    const sizes = new Map([...visuals.nodes].map(([id, v]) => [id, { width: v.width, height: v.height }]));
+    return { model, sizes, edgeLabelSizes: new Map(), rankdir: "TB" as const };
+  }
+
+  it("unconnected nodes are collected in a grid next to the graph, filling its width", () => {
+    const input = createInput("digraph { a -> b -> c; a -> d -> c; c -> e; x1; x2; x3; x4; x5; x6; loop -> loop }");
+    const { positions } = computeLayout("hierarchical", input);
+    const isolated = ["x1", "x2", "x3", "x4", "x5", "x6", "loop"];
+    const main = ["a", "b", "c", "d", "e"];
+    const mainBottom = Math.max(...main.map((id) => positions[id].y + input.sizes.get(id)!.height / 2));
+    const mainRight = Math.max(...main.map((id) => positions[id].x + input.sizes.get(id)!.width / 2));
+    const besideOrBelow = isolated.every((id) => positions[id].y > mainBottom || positions[id].x > mainRight);
+    expect(besideOrBelow).toBe(true);
+    expect(findIsolatedNodes(input.model).sort()).toEqual([...isolated].sort());
+  });
+
+  it("the grid for unconnected nodes can be switched off", () => {
+    const input = createInput("digraph { a -> b; x }");
+    const grouped = computeLayout("grid", input).positions;
+    const mixed = computeLayout("grid", input, { groupIsolated: false }).positions;
+    expect(grouped).not.toEqual(mixed);
+  });
+
+  it("the force-directed layout untangles planar graphs without edge crossings", () => {
+    // A 3x3 grid graph and a wheel are planar; the layout should find crossing-free drawings.
+    for (const dot of [
+      "graph { a--b; b--c; d--e; e--f; g--h; h--i; a--d; d--g; b--e; e--h; c--f; f--i }",
+      "graph { hub--r1; hub--r2; hub--r3; hub--r4; hub--r5; hub--r6; r1--r2; r2--r3; r3--r4; r4--r5; r5--r6; r6--r1 }",
+    ]) {
+      const input = createInput(dot);
+      const { positions } = computeLayout("force", input);
+      expect(countEdgeCrossings(collectLinks(input.model), positions)).toBe(0);
+    }
+  });
+
+  it("crossing reduction removes a crossing by swapping nodes", () => {
+    const model = buildGraphModel("graph { a--b; c--d }");
+    const links = collectLinks(model);
+    const crossed = { a: { x: 0, y: 0 }, b: { x: 100, y: 100 }, c: { x: 100, y: 0 }, d: { x: 0, y: 100 } };
+    expect(countEdgeCrossings(links, crossed)).toBe(1);
+    const radii = new Map(["a", "b", "c", "d"].map((id) => [id, 10]));
+    expect(countEdgeCrossings(links, reduceCrossings(links, crossed, radii))).toBe(0);
+  });
+
+  it("arranging a selection moves only the selected nodes and keeps their center", () => {
+    const input = createInput("digraph { a -> b; b -> c; c -> a; d -> e }");
+    const current = { a: { x: 0, y: 0 }, b: { x: 400, y: 0 }, c: { x: 0, y: 400 }, d: { x: 900, y: 900 }, e: { x: 1000, y: 900 } };
+    const result = computeSelectionLayout("circular", input, ["a", "b", "c"], current);
+    expect(Object.keys(result.positions).sort()).toEqual(["a", "b", "c"]);
+    const cx = (ids: string[], p: Record<string, { x: number }>) => {
+      const xs = ids.map((id) => p[id].x);
+      return (Math.min(...xs) + Math.max(...xs)) / 2;
+    };
+    expect(Math.abs(cx(["a", "b", "c"], result.positions) - cx(["a", "b", "c"], current))).toBeLessThan(40);
   });
 });

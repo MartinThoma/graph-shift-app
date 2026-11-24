@@ -293,3 +293,43 @@ test("the inspector edits a node's label and colors and writes them to the DOT t
   await inspector.getByRole("button", { name: "None" }).click();
   await expect(page.locator(".cm-content")).not.toContainText("fillcolor");
 });
+
+test("Arrange lays out only the selected nodes and leaves the rest and the DOT text alone", async ({ page }) => {
+  const before = await getEditorText(page);
+  const web = await getNodeCenter(page, "web");
+  const mailer = await getNodeCenter(page, "mailer");
+  const queue0 = await getNodeCenter(page, "queue");
+  await page.locator('.graph-canvas [data-node-id="orders"]').click();
+  await page.locator('.graph-canvas [data-node-id="db"]').click({ modifiers: ["Shift"] });
+  await page.locator('.graph-canvas [data-node-id="queue"]').click({ modifiers: ["Shift"] });
+  const inspector = page.locator(".inspector");
+  await inspector.getByLabel("Arrange selection").selectOption("grid");
+  await inspector.getByRole("button", { name: "Arrange" }).click();
+  await expect(page.locator(".status")).toContainText("Arranged 3 nodes with Compact grid");
+  expect(await getNodeCenter(page, "web")).toEqual(web);
+  expect(await getNodeCenter(page, "mailer")).toEqual(mailer);
+  expect(await getNodeCenter(page, "queue")).not.toEqual(queue0);
+  expect(await getEditorText(page)).toBe(before);
+  await expect(page.locator(".lock-state")).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
+  expect(await getNodeCenter(page, "queue")).toEqual(queue0);
+});
+
+test("unconnected nodes are collected in a grid, which can be switched off in the layout options", async ({ page }) => {
+  await page.locator(".cm-content").click();
+  await page.keyboard.press("Control+Home");
+  await page.keyboard.press("End");
+  await page.keyboard.type(" lonely1; lonely2; lonely3;");
+  await page.locator('.graph-canvas [data-node-id="lonely3"]').waitFor();
+  const mailer = await getNodeCenter(page, "mailer");
+  const lonely = await getNodeCenter(page, "lonely1");
+  // The graph is taller than wide, so the grid sits beside it.
+  expect(lonely.y > mailer.y || lonely.x > (await getNodeCenter(page, "auth")).x).toBe(true);
+  await page.getByRole("button", { name: "Layout options" }).click();
+  const checkbox = page.getByRole("checkbox", { name: "Collect unconnected nodes in a grid" });
+  await expect(checkbox).toBeChecked();
+  await expect(page.getByRole("dialog", { name: "Layout options" })).toContainText("This graph has 3 such nodes.");
+  await checkbox.uncheck();
+  await expect(checkbox).not.toBeChecked();
+  expect(await getNodeCenter(page, "lonely1")).not.toEqual(lonely);
+});

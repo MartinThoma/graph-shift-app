@@ -205,3 +205,26 @@ describe("GraphStore: multi-node editing", () => {
     expect(store.getState().visuals!.nodes.get("b")!.width).toBeGreaterThan(80);
   });
 });
+
+describe("GraphStore: layout control", () => {
+  it("arranging a selection is one undo step, marks those nodes as placed by hand and leaves others alone", () => {
+    const store = createStore("digraph {\n  a -> b;\n  b -> c;\n  c -> d;\n  x -> y;\n}\n");
+    const before = { ...store.present.positions };
+    expect(store.layoutSelection(["a", "b", "c"], "circular")).toBe(true);
+    expect(store.present.positions.x).toEqual(before.x);
+    expect(store.present.positions.d).toEqual(before.d);
+    expect(store.present.hasManualChanges).toBe(true);
+    expect(store.present.manualNodes.sort()).toEqual(["a", "b", "c"]);
+    store.undo();
+    expect(store.present.positions).toEqual(before);
+  });
+
+  it("switching the unconnected-node grid lays out again and is undoable", () => {
+    const store = createStore("digraph {\n  a -> b;\n  x;\n}\n");
+    expect(store.present.groupIsolated ?? true).toBe(true);
+    store.setGroupIsolated(false);
+    expect(store.present.groupIsolated).toBe(false);
+    store.undo();
+    expect(store.present.groupIsolated ?? true).toBe(true);
+  });
+});

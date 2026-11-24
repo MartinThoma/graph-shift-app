@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { GraphModel } from "../dot/model";
+import { LAYOUT_ENGINES, type LayoutEngine } from "../layout/initialLayout";
 import { resolveColor } from "../render/colors";
 import { parseStyle, THEME } from "../render/visuals";
 import { CloseIcon } from "./icons";
@@ -104,6 +105,7 @@ interface NodeInspectorProps {
   model: GraphModel;
   ids: string[];
   onChange: (changes: Changes) => void;
+  onArrange: (engine: LayoutEngine) => void;
   onClose: () => void;
 }
 
@@ -134,13 +136,14 @@ export function createStyleWithFilled(style: string | undefined, filled: boolean
 }
 
 /** Panel to edit the selected node(s): label, shape and colors, written back to DOT. */
-export function NodeInspector({ model, ids, onChange, onClose }: NodeInspectorProps) {
+export function NodeInspector({ model, ids, onChange, onArrange, onClose }: NodeInspectorProps) {
   const first = model.nodes.get(ids[0]);
   const single = ids.length === 1;
   const attrs = first?.attrs ?? {};
   const rawLabel = attrs.label ?? "";
   const [label, setLabel] = useState(rawLabel);
   const [openColor, setOpenColor] = useState<string | null>(null);
+  const [arrangeEngine, setArrangeEngine] = useState<LayoutEngine>("force");
   const usedColors = useMemo(() => collectGraphColors(model), [model]);
   const toggleColor = (key: string): void => setOpenColor((current) => (current === key ? null : key));
 
@@ -245,6 +248,25 @@ export function NodeInspector({ model, ids, onChange, onClose }: NodeInspectorPr
         resetDisabled={attrs.color === undefined}
         onReset={() => onChange({ color: null })}
       />
+
+      {!single && (
+        <div className="field">
+          <span id="arrange-label">Arrange selection</span>
+          <div className="arrange-row">
+            <select aria-labelledby="arrange-label" value={arrangeEngine} onChange={(e) => setArrangeEngine(e.target.value as LayoutEngine)}>
+              {LAYOUT_ENGINES.map((engine) => (
+                <option key={engine.id} value={engine.id}>
+                  {engine.label}
+                </option>
+              ))}
+            </select>
+            <button type="button" className="btn" onClick={() => onArrange(arrangeEngine)}>
+              Arrange
+            </button>
+          </div>
+          <small>Lays out only these {ids.length} nodes, centered where they are. Other nodes stay put.</small>
+        </div>
+      )}
 
       <p className="inspector-note">{single ? "Changes are written to the DOT source." : "Applies to every selected node. Drag any of them to move all."}</p>
     </aside>

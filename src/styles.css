@@ -307,6 +307,43 @@ select:hover {
   border-color: var(--accent);
 }
 
+.layout-options {
+  width: 300px;
+}
+
+.popover label.check > span {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+}
+
+.popover label.check,
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.popover .check input,
+.check input {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  margin: 0;
+  accent-color: var(--ink);
+  flex: none;
+}
+
+.arrange-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
 .form-hint {
   margin: 0;
   color: var(--muted);

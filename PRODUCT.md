@@ -53,11 +53,12 @@ The application provides:
 * **Top / Action Bar:**
   * **Initial Layout Selector:** A dropdown with five layouts:
     * *Hierarchical*: layered in edge direction (dagre); honors `rankdir`, `nodesep`, `ranksep`, `minlen`, `weight`, `constraint=false`; edges get routed waypoints.
-    * *Force-directed*: d3-force with a fixed seed, so the result is deterministic.
+    * *Force-directed*: d3-force, deterministic, and tuned to avoid edge crossings. Graphs up to 60 nodes are simulated from four starting arrangements (default, DFS circle, two seeded random ones) and the result with the fewest crossings wins. A refinement pass then swaps the positions of nodes on crossing edges, or mirrors a node across the other edge, whenever that lowers the crossing count without causing overlaps. Refinement has a fixed work budget, so large graphs stay fast and results stay identical across machines.
     * *Radial*: rings around the graph's `root` attribute or the most connected node.
     * *Circular*: each connected component on its own circle, in DFS order.
     * *Compact grid*: rows and columns in topological (flow) order; `rankdir=LR` transposes it.
     * In all non-hierarchical layouts, each cluster is laid out as one unit first, so cluster boxes never enclose unrelated nodes. Disconnected components are packed in rows.
+    * **Unconnected nodes** (no edges to other nodes; self-loops don't count; not inside a cluster) are, by default, left out of the layout and placed in a separate grid that completes the drawing's rectangle: below a wide drawing, stretched to its width, or beside a tall drawing, stretched to its height. If every node is unconnected, they form a roughly square grid. A **Layout options** popover next to the selector switches this off ("Collect unconnected nodes in a grid"); the setting is part of the undo history and the saved session, and changing it lays out again (asking first if nodes are placed by hand).
     * While nodes are placed by hand, the selector shows a vermilion **Placed by hand** lock state.
   * **Graph Editing Controls:** **Add node** (popover with ID, prefilled with an unused `nN`, and optional label), **Add edge** (click source, then target; clicking the same node makes a self-loop; Esc cancels), **Remove node** and **Remove edge** (act on the current selection; also `Delete` / `Backspace`). The destructive group stands apart from the other controls. Double-clicking empty canvas adds a node at that spot.
   * **History Controls:** **Undo** and **Redo** buttons (plus keyboard shortcuts `Ctrl/Cmd+Z` and `Ctrl/Cmd+Shift+Z` or `Ctrl/Cmd+Y`).
@@ -145,6 +146,7 @@ The application provides:
   * Fill colour (sets `fillcolor` and adds `filled` to the node's style, keeping other style flags such as `rounded`; "None" removes both), text colour (`fontcolor`) and border colour (`color`), each with a reset.
   * Clicking a colour swatch opens a palette: *Typical* colours (soft fills for Fill; strong inks for Text and Border), *In this graph* (every other colour already used by nodes, edges, clusters or the graph, up to 20), and a *Custom* picker for any colour.
   * With several nodes selected, shape and colours apply to all of them.
+  * **Arrange selection** (two or more nodes selected): choose a layout and press *Arrange* to lay out only the selected nodes (and the edges between them) with it, centered where they were. All other nodes keep their positions; the arranged nodes count as placed by hand; it is one undo step and does not change the DOT text.
   * Attribute edits change the node's last explicit setting in place, otherwise they are appended to its last statement (or a new `id [...]` statement for nodes that only appear in edges). Changing the same attributes repeatedly within 1.5s (e.g. dragging the colour picker) is one undo step.
 
 ### 4.10 Rendering
@@ -184,14 +186,14 @@ The application provides:
     └── src/
         ├── main.tsx, App.tsx, styles.css
         ├── dot/        ast.ts, parser.ts, model.ts, serializer.ts (write-back)
-        ├── layout/     initialLayout.ts, placement.ts
+        ├── layout/     initialLayout.ts, forceLayout.ts, placement.ts
         ├── render/     colors.ts, text.ts, shapes.ts, visuals.ts, svgMarkup.ts
         ├── canvas/     GraphCanvas.tsx, scene.ts, edgeGeometry.ts
         ├── editor/     DotEditor.tsx, dotLanguage.ts
         ├── state/      store.ts, history.ts, storage.ts
         ├── export/     exportSvg.ts
         ├── pwa/        sw.ts, swLogic.ts, autoUpdate.ts
-        └── ui/         icons.tsx, ConfirmDialog.tsx, AddNodePopover.tsx, NodeInspector.tsx
+        └── ui/         icons.tsx, ConfirmDialog.tsx, AddNodePopover.tsx, LayoutOptionsPopover.tsx, NodeInspector.tsx
 
 * The canvas and the SVG export render the same scene through the same markup functions (`render/svgMarkup.ts`); overlays (grid, selection, hand-placed ticks, edge preview) are drawn separately and never exported.
 * **Automated Checks:**

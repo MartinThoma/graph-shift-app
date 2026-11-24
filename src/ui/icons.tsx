@@ -149,3 +149,11 @@ export const CloseIcon = () => (
     <path d="M4 4l8 8M12 4l-8 8" />
   </Icon>
 );
+
+export const OptionsIcon = () => (
+  <Icon>
+    <path d="M2 4.5h7M12.5 4.5H14M2 11.5h2M7.5 11.5H14" />
+    <circle cx="10.8" cy="4.5" r="1.7" />
+    <circle cx="5.8" cy="11.5" r="1.7" />
+  </Icon>
+);
