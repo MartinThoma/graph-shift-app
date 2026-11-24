@@ -563,6 +563,34 @@ export class GraphStore {
     this.setState({ history: pushHistory(this.state.history, next), dragPositions: null });
   }
 
+  /**
+   * Load a graph from a share link as a new undo step, so the previous work
+   * is one undo away. Shared positions are kept; missing ones are laid out.
+   */
+  importSharedDocument(doc: {
+    dot: string;
+    engine: LayoutEngine;
+    groupIsolated?: boolean;
+    positions?: Record<string, Point>;
+    routes?: Record<string, EdgeRoute>;
+    manualNodes?: string[];
+  }): void {
+    this.flush();
+    const hasHand = !!doc.positions && !!doc.manualNodes?.length;
+    const next: DocState = {
+      dot: doc.dot,
+      engine: doc.engine,
+      groupIsolated: doc.groupIsolated ?? true,
+      positions: hasHand ? doc.positions! : {},
+      routes: hasHand ? (doc.routes ?? {}) : {},
+      manualNodes: hasHand ? doc.manualNodes! : [],
+      hasManualChanges: hasHand,
+    };
+    this.resetCoalescing();
+    this.restorePresent(pushHistory(this.state.history, next), { keepHistory: true });
+    this.setState({ externalTextVersion: this.state.externalTextVersion + 1 });
+  }
+
   /* ---------------------------------------------------------------- */
   /* History                                                           */
   /* ---------------------------------------------------------------- */

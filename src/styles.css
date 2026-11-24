@@ -307,6 +307,106 @@ select:hover {
   border-color: var(--accent);
 }
 
+.popover.align-right {
+  left: auto;
+  right: 0;
+}
+
+.popover h2 {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+a.btn {
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.share-popover {
+  width: 380px;
+}
+
+.share-url {
+  width: 100%;
+  font-family: var(--font-mono) !important;
+  font-size: 12px !important;
+  color: var(--ink-2);
+}
+
+.share-url:disabled {
+  background: var(--paper);
+  border-color: var(--hair);
+}
+
+.share-info {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--paper);
+  border: 1px solid var(--control);
+  border-radius: var(--radius);
+  color: var(--ink-2);
+  line-height: 1.45;
+}
+
+.share-copied {
+  margin-right: auto;
+  align-self: center;
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+.about-popover {
+  width: 320px;
+}
+
+.about-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+}
+
+.about-facts dt {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  align-self: center;
+}
+
+.about-facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.about-facts code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.about-invite {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.about-invite a {
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 3px;
+}
+
+.about-actions {
+  justify-content: flex-start;
+}
+
+.about-toggle {
+  margin-left: 4px;
+}
+
 .layout-options {
   width: 300px;
 }
@@ -952,11 +1052,10 @@ select:hover {
   }
   .layout-group {
     order: 1;
-    flex: 1;
-    min-width: 0;
+    flex: 1 0 auto;
   }
   .layout-group select {
-    min-width: 0;
+    min-width: 128px;
     flex: 1;
     max-width: 180px;
   }
@@ -966,8 +1065,15 @@ select:hover {
   .spacer {
     display: none;
   }
-  .btn.primary {
+  .output-group {
     order: 3;
+  }
+  .output-group .btn:not(.primary) .label {
+    display: none;
+  }
+  .output-group .btn[data-share-toggle] {
+    width: 34px;
+    padding: 0;
   }
   .btn.update {
     order: 4;

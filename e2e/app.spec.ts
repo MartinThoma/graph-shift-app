@@ -333,3 +333,67 @@ test("unconnected nodes are collected in a grid, which can be switched off in th
   await expect(checkbox).not.toBeChecked();
   expect(await getNodeCenter(page, "lonely1")).not.toEqual(lonely);
 });
+
+test("a share link carries the whole graph with hand-placed positions and opens as an undoable step", async ({ page, browser }) => {
+  await dragNode(page, "db", 120, 40);
+  const text = await getEditorText(page);
+  await page.getByRole("button", { name: "Share" }).click();
+  const dialog = page.getByRole("dialog", { name: "Share link" });
+  const input = dialog.getByRole("textbox", { name: "Share link" });
+  await expect(input).toHaveValue(/#share=v1\./);
+  await expect(dialog).toContainText("hand-placed positions are included");
+  const url = await input.inputValue();
+
+  // Open the link in a fresh browser profile.
+  const other = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page2 = await other.newPage();
+  await page2.goto(url);
+  await page2.locator('.graph-canvas [data-node-id="db"]').waitFor();
+  await expect(page2.locator(".status")).toContainText("Opened a shared graph");
+  expect(await getEditorText(page2)).toBe(text);
+  expect(page2.url()).not.toContain("#share=");
+  // The same (rounded) positions as on the sharing side.
+  const readPositions = (p: typeof page) =>
+    p.evaluate(() => JSON.parse(localStorage.getItem("graph-shift:session:v1")!).history.present.positions as Record<string, { x: number; y: number }>);
+  await page2.waitForTimeout(600);
+  const shared = await readPositions(page2);
+  const original = await readPositions(page);
+  for (const id of Object.keys(original)) {
+    expect(shared[id].x).toBeCloseTo(original[id].x, -0.5);
+    expect(shared[id].y).toBeCloseTo(original[id].y, -0.5);
+  }
+  // Undo returns to what was there before (the sample graph in a fresh profile).
+  await page2.getByRole("button", { name: "Undo" }).click();
+  await expect(page2.locator(".cm-content")).toContainText("Drag nodes to tidy the picture");
+  await other.close();
+});
+
+test("the share link is disabled with an explanation when the graph is too big", async ({ page }) => {
+  let seed = 7;
+  const next = () => (seed = (seed * 1103515245 + 12345) % 2147483648).toString(36);
+  const big = `digraph {\n${Array.from({ length: 900 }, () => `  ${"n" + next()} -> ${"m" + next()};`).join("\n")}\n}\n`;
+  await page.locator(".cm-content").click();
+  await page.keyboard.press("Control+a");
+  await page.keyboard.insertText(big);
+  await page.waitForTimeout(400);
+  await page.getByRole("button", { name: "Share" }).click();
+  const dialog = page.getByRole("dialog", { name: "Share link" });
+  await expect(dialog.getByRole("note")).toContainText("too big for a share link");
+  await expect(dialog.getByRole("button", { name: "Copy link" })).toBeDisabled();
+  await expect(dialog.getByRole("button", { name: "Copy DOT text" })).toBeEnabled();
+});
+
+test("the info button shows the version and invites feedback on GitHub", async ({ page }) => {
+  await page.getByRole("button", { name: "About Graph Shift" }).click();
+  const dialog = page.getByRole("dialog", { name: "About Graph Shift" });
+  await expect(dialog).toContainText(/Version\s*\d{8}T\d{6}Z-/);
+  await expect(dialog.getByRole("link", { name: "Source on GitHub" })).toHaveAttribute("href", "https://github.com/MartinThoma/graph-shift-app");
+  await expect(dialog.getByRole("link", { name: "Open an issue on GitHub" })).toHaveAttribute(
+    "href",
+    "https://github.com/MartinThoma/graph-shift-app/issues/new",
+  );
+  await dialog.getByRole("button", { name: "Check for updates" }).click();
+  await expect(dialog.getByRole("status")).toContainText(/latest version|newer version|offline|not available|Could not reach/);
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+});

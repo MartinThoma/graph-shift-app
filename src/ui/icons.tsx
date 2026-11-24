@@ -157,3 +157,18 @@ export const OptionsIcon = () => (
     <circle cx="5.8" cy="11.5" r="1.7" />
   </Icon>
 );
+
+export const ShareIcon = () => (
+  <Icon>
+    <path d="M6.8 9.2a2.6 2.6 0 0 0 3.7 0l2.4-2.4a2.6 2.6 0 0 0-3.7-3.7l-.9.9" />
+    <path d="M9.2 6.8a2.6 2.6 0 0 0-3.7 0L3.1 9.2a2.6 2.6 0 0 0 3.7 3.7l.9-.9" />
+  </Icon>
+);
+
+export const InfoIcon = () => (
+  <Icon>
+    <circle cx="8" cy="8" r="6.2" />
+    <path d="M8 7.2v4" />
+    <path d="M8 4.9v.1" strokeWidth="1.8" />
+  </Icon>
+);

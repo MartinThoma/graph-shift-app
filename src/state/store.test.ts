@@ -228,3 +228,27 @@ describe("GraphStore: layout control", () => {
     expect(store.present.groupIsolated ?? true).toBe(true);
   });
 });
+
+describe("GraphStore: shared graphs", () => {
+  it("opening a shared graph is one undo step away from the previous work", () => {
+    const store = createStore();
+    store.importSharedDocument({ dot: "graph { x -- y }", engine: "circular" });
+    expect(store.present.dot).toBe("graph { x -- y }");
+    expect(store.present.engine).toBe("circular");
+    expect(Object.keys(store.present.positions).sort()).toEqual(["x", "y"]);
+    store.undo();
+    expect(store.present.dot).toBe(DOT);
+  });
+
+  it("shared hand-placed positions are kept exactly", () => {
+    const store = createStore();
+    store.importSharedDocument({
+      dot: "digraph { p -> q }",
+      engine: "hierarchical",
+      positions: { p: { x: 5, y: 7 }, q: { x: 300, y: 7 } },
+      manualNodes: ["q"],
+    });
+    expect(store.present.positions).toEqual({ p: { x: 5, y: 7 }, q: { x: 300, y: 7 } });
+    expect(store.present.hasManualChanges).toBe(true);
+  });
+});

@@ -58,8 +58,8 @@ if (missing.length) fail(`not precached: ${missing.join(", ")}`);
 if (extra.length) fail(`precached but missing from dist: ${extra.join(", ")}`);
 for (const f of listed) if (!sw.includes(f)) fail(`sw.js does not precache ${f}`);
 
-// 5. No external hosts at runtime
-const allowedHosts = new Set(["www.w3.org", "react.dev", "reactjs.org", "fb.me"]);
+// 5. No external hosts at runtime (github.com is only the "Source on GitHub" link, never fetched)
+const allowedHosts = new Set(["www.w3.org", "react.dev", "reactjs.org", "fb.me", "github.com"]);
 for (const file of files.filter((f) => /\.(js|css|html|webmanifest)$/.test(f))) {
   const text = readFileSync(join(dist, file), "utf8");
   for (const [, host] of text.matchAll(/https?:\/\/([a-z0-9.-]+)/gi)) {

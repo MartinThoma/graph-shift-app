@@ -15,8 +15,10 @@ export interface AutoUpdateOptions {
   intervalMs?: number;
 }
 
+export type UpdateCheckResult = "update" | "current" | "offline" | "unavailable" | "error";
+
 export interface AutoUpdateController {
-  checkNow: () => Promise<void>;
+  checkNow: () => Promise<UpdateCheckResult>;
   applyUpdate: () => void;
   dispose: () => void;
 }
@@ -24,7 +26,7 @@ export interface AutoUpdateController {
 const MIN_CHECK_GAP_MS = 60_000;
 
 export function startAutoUpdate(options: AutoUpdateOptions): AutoUpdateController {
-  const noop: AutoUpdateController = { checkNow: async () => {}, applyUpdate: () => location.reload(), dispose: () => {} };
+  const noop: AutoUpdateController = { checkNow: async () => "unavailable", applyUpdate: () => location.reload(), dispose: () => {} };
   if (!("serviceWorker" in navigator) || import.meta.env.DEV) return noop;
 
   let registration: ServiceWorkerRegistration | null = null;
@@ -56,22 +58,28 @@ export function startAutoUpdate(options: AutoUpdateOptions): AutoUpdateControlle
     attach(reg);
   };
 
-  const checkNow = async (force = false): Promise<void> => {
-    if (disposed || !navigator.onLine) return;
+  const checkNow = async (force = false): Promise<UpdateCheckResult> => {
+    if (disposed) return "unavailable";
+    if (!navigator.onLine) return "offline";
     const now = Date.now();
-    if (!force && now - lastCheck < MIN_CHECK_GAP_MS) return;
+    if (!force && now - lastCheck < MIN_CHECK_GAP_MS) return "current";
     lastCheck = now;
     try {
       const response = await fetch(`./version.json?t=${now}`, { cache: "no-store" });
-      if (!response.ok) return;
+      if (!response.ok) return "error";
       const remote = ((await response.json()) as { version?: string }).version ?? null;
       const known = registration
         ? [registration.active, registration.waiting, registration.installing].map((w) => parseVersionFromScriptUrl(w?.scriptURL))
         : [];
-      if (decideUpdateAction(options.version, remote, known) === "register" && remote) await register(remote);
-      else await registration?.update().catch(() => {});
+      if (decideUpdateAction(options.version, remote, known) === "register" && remote) {
+        await register(remote);
+        return "update";
+      }
+      await registration?.update().catch(() => {});
+      return registration?.waiting || registration?.installing ? "update" : "current";
     } catch {
       // offline or blocked: try again later
+      return "error";
     }
   };
 

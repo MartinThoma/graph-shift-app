@@ -66,6 +66,8 @@ The application provides:
   * **Reset / Re-layout Action (Gated):** **Reset layout…** recomputes positions with the current layout. It is enabled only while positions are placed by hand and always asks first.
   * **Update Notification (Conditional):** **Update available — Reload**, shown only when a newer version is installed and waiting.
   * **Install:** When the browser offers installation (`beforeinstallprompt`), an install button appears.
+  * **Share:** opens the share-link panel (see 4.12).
+  * **About (ⓘ, far right):** shows the build version and build date, says that everything stays in the browser, links to the source at https://github.com/MartinThoma/graph-shift-app, invites feature requests and bug reports via "Open an issue on GitHub" (`…/issues/new`), and has a "Check for updates" button that reports the result (latest / update downloading / offline / unavailable / unreachable).
 * **Status line:** A status chip at the bottom left of the canvas reports the current mode, the selection, how many nodes are placed by hand, and short-lived notices (e.g. "Fix the DOT error first").
 * **Small screens:** Below 760px the panes become two tabs (*DOT source* / *Graph*), the toolbar becomes a horizontally scrolling row of icon buttons, and touch supports drag, pan and pinch zoom.
 * **Splitter:** The border between editor and canvas can be dragged (or moved with the arrow keys) to resize the editor; the width is remembered per browser.
@@ -159,7 +161,13 @@ The application provides:
 * Edge geometry: edges are clipped to the node outline. Parallel edges between the same pair fan out as curves. Self-loops sit on the right side of the node and stack. Routed (hierarchical) edges keep their waypoints, which bend with the endpoints while nodes are dragged.
 * Node sizes are measured from the label text with the bundled fonts (Inter, JetBrains Mono), which are self-hosted.
 
-### 4.11 Keyboard
+### 4.12 Share Links
+* **Share** creates a link that contains the whole graph: the DOT text, the layout and its options, and, if nodes were placed by hand, all positions, edge routes and which nodes were placed by hand.
+* The data is JSON, compressed with the browser's built-in `deflate-raw` (`CompressionStream`) and base64url-encoded into the URL fragment: `<app URL>#share=v1.<data>`. Fragments are never sent to a server, so sharing uploads nothing.
+* Links are limited to 8,000 characters (longer URLs break in chat apps, mail clients and some browsers). If the link with positions is too long, a link without positions is offered instead (the recipient gets a fresh layout) and the panel says so. If even that is too long, the link field and "Copy link" are disabled, an explanation shows the size and the limit, and "Copy DOT text" is offered instead.
+* Opening a share link (on load or when the fragment changes) loads the graph as a new undo step, so the previous work is one undo away, shows a notice, and removes the fragment from the address bar. Malformed links show a notice and change nothing. Shared data is validated (types, sizes) before use.
+
+### 4.13 Keyboard
 * `Ctrl/Cmd+Z` undo, `Ctrl/Cmd+Shift+Z` or `Ctrl/Cmd+Y` redo (outside the editor), `Ctrl/Cmd+A` select all nodes, `Delete`/`Backspace` remove the selection, `Esc` cancels add-edge mode or clears the selection, arrow keys nudge the selected nodes, `V` / `H` switch between the Select and Pan tools, Space+drag pans.
 
 ---
@@ -193,7 +201,9 @@ The application provides:
         ├── state/      store.ts, history.ts, storage.ts
         ├── export/     exportSvg.ts
         ├── pwa/        sw.ts, swLogic.ts, autoUpdate.ts
-        └── ui/         icons.tsx, ConfirmDialog.tsx, AddNodePopover.tsx, LayoutOptionsPopover.tsx, NodeInspector.tsx
+        ├── share/      shareLink.ts
+        └── ui/         icons.tsx, ConfirmDialog.tsx, AddNodePopover.tsx, LayoutOptionsPopover.tsx, NodeInspector.tsx,
+                        SharePopover.tsx, AboutPopover.tsx, useDismiss.ts
 
 * The canvas and the SVG export render the same scene through the same markup functions (`render/svgMarkup.ts`); overlays (grid, selection, hand-placed ticks, edge preview) are drawn separately and never exported.
 * **Automated Checks:**

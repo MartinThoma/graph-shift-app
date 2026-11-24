@@ -10,7 +10,10 @@ import { loadSession, saveSession, type Viewport } from "./state/storage";
 import { GraphStore } from "./state/store";
 import { AddNodePopover } from "./ui/AddNodePopover";
 import { ConfirmDialog } from "./ui/ConfirmDialog";
+import { decodeShareData, parseShareHash } from "./share/shareLink";
+import { AboutPopover } from "./ui/AboutPopover";
 import { LayoutOptionsPopover } from "./ui/LayoutOptionsPopover";
+import { SharePopover } from "./ui/SharePopover";
 import { NodeInspector } from "./ui/NodeInspector";
 import {
   AddEdgeIcon,
@@ -21,12 +24,14 @@ import {
   HandIcon,
   HandMarkIcon,
   HandTick,
+  InfoIcon,
   InstallIcon,
   MarqueeIcon,
   OptionsIcon,
   RedoIcon,
   RemoveEdgeIcon,
   RemoveNodeIcon,
+  ShareIcon,
   ResetIcon,
   UndoIcon,
   ZoomInIcon,
@@ -90,6 +95,10 @@ export function App() {
   const [pendingLayout, setPendingLayout] = useState<PendingLayout | null>(null);
   const [addNodeOpen, setAddNodeOpen] = useState(false);
   const [layoutOptionsOpen, setLayoutOptionsOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const closeShare = useCallback(() => setShareOpen(false), []);
+  const closeAbout = useCallback(() => setAboutOpen(false), []);
   const [suggestedId, setSuggestedId] = useState("n1");
   const [notice, setNotice] = useState<string | null>(null);
   const [updateReady, setUpdateReady] = useState(false);
@@ -207,6 +216,28 @@ export function App() {
       // storage unavailable
     }
   }, [showHandMarks]);
+
+  // Open graphs from share links (#share=...), now and whenever the hash changes.
+  useEffect(() => {
+    const openFromHash = async (): Promise<void> => {
+      const data = parseShareHash(window.location.hash);
+      if (!data) return;
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+      try {
+        const doc = await decodeShareData(data);
+        store.importSharedDocument(doc);
+        setSelection(null);
+        fitRequested.current = true;
+        setNotice("Opened a shared graph. Undo returns to your previous graph.");
+      } catch (error) {
+        setNotice(`Could not open the share link. ${error instanceof Error ? error.message : ""}`.trim());
+      }
+    };
+    void openFromHash();
+    const onHashChange = (): void => void openFromHash();
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, [store]);
 
   useEffect(() => {
     if (!notice) return;
@@ -627,10 +658,56 @@ export function App() {
             <InstallIcon />
           </button>
         )}
-        <button type="button" className="btn primary" onClick={handleDownload} disabled={!scene || !model?.nodes.size}>
-          <DownloadIcon />
-          <span className="label">Download SVG</span>
-        </button>
+        <div className="group output-group">
+          <button
+            type="button"
+            className="btn"
+            data-share-toggle
+            aria-expanded={shareOpen}
+            aria-haspopup="dialog"
+            onClick={() => setShareOpen((open) => !open)}
+            title="Create a link that contains this graph"
+          >
+            <ShareIcon />
+            <span className="label">Share</span>
+          </button>
+          <button type="button" className="btn primary" onClick={handleDownload} disabled={!scene || !model?.nodes.size}>
+            <DownloadIcon />
+            <span className="label">Download SVG</span>
+          </button>
+          <button
+            type="button"
+            className="btn icon-only about-toggle"
+            data-about-toggle
+            aria-expanded={aboutOpen}
+            aria-haspopup="dialog"
+            aria-label="About Graph Shift"
+            title="Version, source code and feedback"
+            onClick={() => setAboutOpen((open) => !open)}
+          >
+            <InfoIcon />
+          </button>
+          {shareOpen && (
+            <SharePopover
+              doc={{
+                dot: present.dot,
+                engine: present.engine,
+                groupIsolated: present.groupIsolated,
+                positions: present.positions,
+                routes: present.routes,
+                manualNodes: present.hasManualChanges ? present.manualNodes : [],
+              }}
+              onClose={closeShare}
+            />
+          )}
+          {aboutOpen && (
+            <AboutPopover
+              version={__APP_VERSION__}
+              onCheckForUpdates={() => updaterRef.current?.checkNow() ?? Promise.resolve("unavailable")}
+              onClose={closeAbout}
+            />
+          )}
+        </div>
       </header>
 
       <nav className="pane-tabs" aria-label="Panes">
