@@ -4,7 +4,7 @@
  * Instead of re-serializing the AST (which would drop comments and formatting),
  * every operation computes minimal replacements of the statements it touches.
  */
-import type { EdgeStmt, GraphAst, NodeRef, Stmt, SubgraphStmt } from "./ast";
+import type { AttrItem, AttrList, EdgeStmt, GraphAst, NodeRef, NodeStmt, Stmt, SubgraphStmt } from "./ast";
 import { buildGraphModel, type EdgeInfo, type GraphModel } from "./model";
 import { parseDot } from "./parser";
 
@@ -293,4 +293,125 @@ function createEdgeRemovals(edge: EdgeInfo): RemovalPlan["edges"] {
     map.set(origin.stmt, list);
   }
   return map;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Node attributes                                                           */
+/* ------------------------------------------------------------------------ */
+
+/** Collect every node statement for a node ID, in source order (including inside subgraphs). */
+function collectNodeStatements(stmts: Stmt[], nodeId: string, out: NodeStmt[] = []): NodeStmt[] {
+  for (const stmt of stmts) {
+    if (stmt.type === "node" && stmt.node.id.value === nodeId) out.push(stmt);
+    else if (stmt.type === "subgraph") collectNodeStatements(stmt.stmts, nodeId, out);
+    else if (stmt.type === "edge") {
+      for (const operand of stmt.operands) if (operand.type === "subgraph") collectNodeStatements(operand.stmts, nodeId, out);
+    }
+  }
+  return out;
+}
+
+/**
+ * Quote a raw DOT escString for a label: keeps escapes such as `\n` and `\l`
+ * as typed and escapes bare double quotes.
+ */
+export function quoteEscString(raw: string): string {
+  let out = "";
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+    if (ch === "\\") {
+      out += i + 1 < raw.length ? ch + raw[++i] : "\\\\";
+    } else if (ch === '"') out += '\\"';
+    else if (ch === "\n") out += "\\n";
+    else out += ch;
+  }
+  return `"${out}"`;
+}
+
+/** Format an attribute value for DOT text. */
+export function formatAttrValue(key: string, value: string, html = false): string {
+  if (html) return `<${value}>`;
+  if (key === "label" || key === "xlabel" || key === "tooltip") return quoteEscString(value);
+  return quoteId(value);
+}
+
+/** Remove one attribute item (with its separator) or its whole list when it is the only item. */
+function createAttrRemovalEdit(source: string, stmt: NodeStmt, list: AttrList, item: AttrItem): TextEdit {
+  if (list.items.length === 1) {
+    let start = list.start;
+    while (start > stmt.node.end && /[ \t]/.test(source[start - 1])) start--;
+    return { start, end: list.end, text: "" };
+  }
+  const index = list.items.indexOf(item);
+  if (index < list.items.length - 1) {
+    return { start: item.start, end: list.items[index + 1].start, text: "" };
+  }
+  return { start: list.items[index - 1].end, end: item.end, text: "" };
+}
+
+/** Set (or with `null`, remove) one attribute on a node, editing the DOT text in place. */
+function setSingleNodeAttribute(source: string, nodeId: string, key: string, value: string | null, html: boolean): string {
+  if (value === null) {
+    // Remove every explicit occurrence, one at a time (each edit re-parses).
+    let text = source;
+    for (let guard = 0; guard < 100; guard++) {
+      const stmts = collectNodeStatements(parseDot(text).stmts, nodeId);
+      let edit: TextEdit | null = null;
+      for (const stmt of stmts) {
+        for (const list of stmt.attrs) {
+          const item = list.items.find((i) => i.key.value === key);
+          if (item) {
+            edit = createAttrRemovalEdit(text, stmt, list, item);
+            break;
+          }
+        }
+        if (edit) break;
+      }
+      if (!edit) return text;
+      text = applyTextEdits(text, [edit]);
+    }
+    return text;
+  }
+  const valueText = formatAttrValue(key, value, html);
+  const stmts = collectNodeStatements(parseDot(source).stmts, nodeId);
+  // The last explicit occurrence is the effective one: edit it in place.
+  for (let s = stmts.length - 1; s >= 0; s--) {
+    const stmt = stmts[s];
+    for (let l = stmt.attrs.length - 1; l >= 0; l--) {
+      const items = stmt.attrs[l].items;
+      for (let i = items.length - 1; i >= 0; i--) {
+        const item = items[i];
+        if (item.key.value !== key) continue;
+        if (item.value) return applyTextEdits(source, [{ start: item.value.start, end: item.value.end, text: valueText }]);
+        return applyTextEdits(source, [{ start: item.key.end, end: item.key.end, text: `=${valueText}` }]);
+      }
+    }
+  }
+  const assignment = `${quoteId(key)}=${valueText}`;
+  const stmt = stmts[stmts.length - 1];
+  if (!stmt) return insertStatement(source, `${quoteId(nodeId)} [${assignment}]`);
+  if (stmt.attrs.length) {
+    const list = stmt.attrs[stmt.attrs.length - 1];
+    const lastItem = list.items[list.items.length - 1];
+    if (!lastItem) return applyTextEdits(source, [{ start: list.start + 1, end: list.end - 1, text: assignment }]);
+    return applyTextEdits(source, [{ start: lastItem.end, end: lastItem.end, text: `, ${assignment}` }]);
+  }
+  return applyTextEdits(source, [{ start: stmt.node.end, end: stmt.node.end, text: ` [${assignment}]` }]);
+}
+
+/**
+ * Change attributes of a node in the DOT text. `null` removes the attribute.
+ * The node's last explicit setting is edited in place; otherwise the attribute
+ * is appended to the node's last statement, or a new `id [key=value]`
+ * statement is added when the node only appears in edges.
+ */
+export function setNodeAttributesInDot(
+  source: string,
+  nodeId: string,
+  changes: Record<string, string | null>,
+  htmlKeys: string[] = [],
+): string {
+  let text = source;
+  for (const [key, value] of Object.entries(changes)) text = setSingleNodeAttribute(text, nodeId, key, value, htmlKeys.includes(key));
+  return text;
 }

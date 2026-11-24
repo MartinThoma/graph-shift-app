@@ -8,6 +8,7 @@ import {
   quoteId,
   removeEdgeFromDot,
   removeNodeFromDot,
+  setNodeAttributesInDot,
 } from "./serializer";
 
 describe("DOT parser", () => {
@@ -230,5 +231,47 @@ describe("DOT write-back: removing", () => {
     const src = 'digraph {\n  "web server" -> db;\n}';
     const out = removeNodeFromDot(src, "web server");
     expect(out).toBe("digraph {\n  db;\n}");
+  });
+});
+
+describe("DOT write-back: node attributes", () => {
+  it("changing an existing attribute edits its value in place", () => {
+    const src = 'digraph {\n  a [label="Old", shape=box]; // keep\n}';
+    expect(setNodeAttributesInDot(src, "a", { label: "New" })).toBe('digraph {\n  a [label="New", shape=box]; // keep\n}');
+  });
+
+  it("a new attribute is appended to the node's last statement", () => {
+    expect(setNodeAttributesInDot("digraph {\n  a [shape=box];\n}", "a", { fontcolor: "#ff0000" })).toBe(
+      'digraph {\n  a [shape=box, fontcolor="#ff0000"];\n}',
+    );
+    expect(setNodeAttributesInDot("digraph {\n  a;\n}", "a", { color: "red" })).toBe("digraph {\n  a [color=red];\n}");
+  });
+
+  it("a node mentioned only in edges gets its own attribute statement", () => {
+    expect(setNodeAttributesInDot("digraph {\n  a -> b;\n}", "b", { label: "B" })).toBe('digraph {\n  a -> b;\n  b [label="B"];\n}');
+  });
+
+  it("the effective (last) explicit setting is the one that changes", () => {
+    const src = "digraph {\n  a [color=red];\n  a [color=blue];\n}";
+    expect(setNodeAttributesInDot(src, "a", { color: "green" })).toBe("digraph {\n  a [color=red];\n  a [color=green];\n}");
+  });
+
+  it("removing an attribute deletes every explicit occurrence and empty lists", () => {
+    const src = "digraph {\n  a [color=red];\n  a [shape=box, color=blue, label=x];\n}";
+    expect(setNodeAttributesInDot(src, "a", { color: null })).toBe("digraph {\n  a;\n  a [shape=box, label=x];\n}");
+    expect(setNodeAttributesInDot("digraph { a [x=1, y=2] }", "a", { y: null })).toBe("digraph { a [x=1] }");
+  });
+
+  it("labels keep typed escapes like \\n and escape double quotes", () => {
+    const out = setNodeAttributesInDot("digraph { a }", "a", { label: 'Line 1\\nSay "hi"' });
+    expect(out).toBe('digraph { a [label="Line 1\\nSay \\"hi\\""] }');
+    expect(buildGraphModel(out).nodes.get("a")!.attrs.label).toBe('Line 1\\nSay "hi"');
+  });
+
+  it("attributes inside clusters are edited where they are declared", () => {
+    const src = "digraph {\n  subgraph cluster_a {\n    x [label=X];\n  }\n}";
+    expect(setNodeAttributesInDot(src, "x", { fillcolor: "#eeeeee", style: "filled" })).toBe(
+      'digraph {\n  subgraph cluster_a {\n    x [label=X, fillcolor="#eeeeee", style=filled];\n  }\n}',
+    );
   });
 });

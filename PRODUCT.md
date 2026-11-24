@@ -115,7 +115,7 @@ The application provides:
 * Ensure pan/zoom transforms work accurately with pointer coordinate conversion during node dragging.
 * The zoom percentage button resets to 100%. Fit to view never zooms in beyond 100%. Zoom is limited to 5%–800%.
 * The sheet grid (20px minor, 100px major) lives in graph coordinates, so it pans and zooms with the drawing; the minor grid hides when it would get too dense.
-* With a node selected and the canvas focused, the arrow keys nudge it by 1px (10px with Shift); each nudge is a manual move.
+* With nodes selected and the canvas focused, the arrow keys nudge them by 1px (10px with Shift); each nudge is a manual move.
 
 ### 4.6 Undo & Redo
 * Maintain an undo/redo stack covering manual node position changes as well as UI-driven node/edge additions and removals.
@@ -133,7 +133,20 @@ The application provides:
 * Saved under `graph-shift:session:v1`: the current snapshot, the last 50 undo and redo steps, and the viewport (pan/zoom). Saving is debounced (400ms) and also happens when the page is hidden or before an update reload. If storage is full, the session is saved without history. Malformed stored data is ignored.
 * A fresh start shows a small sample graph (a checkout service architecture with a cluster, labels and a self-loop).
 
-### 4.9 Rendering
+### 4.9 Selection, Group Moves & Inspector
+* **Click** a node to select it; **Shift+click** adds it to or removes it from the selection. **Ctrl/Cmd+A** selects all nodes; **Esc** or clicking empty sheet clears the selection.
+* **Group move:** dragging any selected node moves every selected node by the same offset, so their relative positions stay intact. Arrow keys nudge the whole selection. A group move is one undo step and, like any drag, does not change the DOT text.
+* **Rectangle select:** **Shift+drag** on empty sheet draws a selection rectangle; every node whose box intersects it is selected (with Shift held, added to the current selection).
+* **Pan vs. select:** a toggle next to the zoom buttons decides what a plain drag on empty sheet does: *Pan* (default, `H`) moves the view; *Select* (`V`) draws a selection rectangle. In either mode the middle mouse button and Space+drag pan, the wheel and pinch zoom, and two-finger touch pans/zooms, so navigation never turns into a selection by accident. Dragging a node always moves it.
+* **Remove node** removes all selected nodes (and their edges) as one undo step.
+* **Inspector:** while nodes are selected, a panel at the top-right of the canvas edits them, writing the attributes into the DOT text:
+  * Label (single node only; DOT escapes such as `\n` are kept as typed; empty removes the label so the ID shows). Committed on Enter or when the field loses focus.
+  * Shape (common shapes; "Mixed" when the selected nodes differ).
+  * Fill colour (sets `fillcolor` and adds `filled` to the node's style, keeping other style flags such as `rounded`; "None" removes both), text colour (`fontcolor`) and border colour (`color`), each with a reset.
+  * With several nodes selected, shape and colours apply to all of them.
+  * Attribute edits change the node's last explicit setting in place, otherwise they are appended to its last statement (or a new `id [...]` statement for nodes that only appear in edges). Changing the same attributes repeatedly within 1.5s (e.g. dragging the colour picker) is one undo step.
+
+### 4.10 Rendering
 * Graphs are drawn by the app's own SVG renderer, in an ink-on-white "Drafting Grid" style (see DESIGN.md), and DOT attributes override that style:
   * Nodes: `label` (escapes `\n`, `\l`, `\r`, `\N`, `\G`; HTML labels shown as plain text), `shape` (box, rect, square, ellipse, oval, circle, doublecircle, point, plaintext, plain, none, underline, diamond, triangle, invtriangle, hexagon, octagon, pentagon, septagon, parallelogram, trapezium, invtrapezium, house, invhouse, star, cylinder, note, tab, folder, component, box3d, cds, rarrow, larrow, record and Mrecord with fields), `style` (filled, rounded, dashed, dotted, bold, invis, setlinewidth), `color`, `fillcolor`, `fontcolor`, `fontsize`, `fontname`, `penwidth`, `width`, `height`, `fixedsize`, `peripheries`.
   * Edges: `label`, `xlabel`, `headlabel`, `taillabel`, `color`, `style`, `penwidth`, `dir`, `arrowhead`, `arrowtail` (normal, inv, vee, open, dot, diamond, box, tee, crow, curve and their `o` variants), `arrowsize`, compass ports.
@@ -143,8 +156,8 @@ The application provides:
 * Edge geometry: edges are clipped to the node outline. Parallel edges between the same pair fan out as curves. Self-loops sit on the right side of the node and stack. Routed (hierarchical) edges keep their waypoints, which bend with the endpoints while nodes are dragged.
 * Node sizes are measured from the label text with the bundled fonts (Inter, JetBrains Mono), which are self-hosted.
 
-### 4.10 Keyboard
-* `Ctrl/Cmd+Z` undo, `Ctrl/Cmd+Shift+Z` or `Ctrl/Cmd+Y` redo (outside the editor), `Delete`/`Backspace` remove the selection, `Esc` cancels add-edge mode or clears the selection, arrow keys nudge the selected node.
+### 4.11 Keyboard
+* `Ctrl/Cmd+Z` undo, `Ctrl/Cmd+Shift+Z` or `Ctrl/Cmd+Y` redo (outside the editor), `Ctrl/Cmd+A` select all nodes, `Delete`/`Backspace` remove the selection, `Esc` cancels add-edge mode or clears the selection, arrow keys nudge the selected nodes, `V` / `H` switch between the Select and Pan tools, Space+drag pans.
 
 ---
 
@@ -177,7 +190,7 @@ The application provides:
         ├── state/      store.ts, history.ts, storage.ts
         ├── export/     exportSvg.ts
         ├── pwa/        sw.ts, swLogic.ts, autoUpdate.ts
-        └── ui/         icons.tsx, ConfirmDialog.tsx, AddNodePopover.tsx
+        └── ui/         icons.tsx, ConfirmDialog.tsx, AddNodePopover.tsx, NodeInspector.tsx
 
 * The canvas and the SVG export render the same scene through the same markup functions (`render/svgMarkup.ts`); overlays (grid, selection, hand-placed ticks, edge preview) are drawn separately and never exported.
 * **Automated Checks:**

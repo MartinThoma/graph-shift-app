@@ -158,3 +158,50 @@ describe("GraphStore", () => {
     expect(parseSession(JSON.stringify({ version: 1, history: { present: { dot: 1 } } }))).toBeNull();
   });
 });
+
+describe("GraphStore: multi-node editing", () => {
+  it("dragging a group moves all selected nodes by the same offset as one undo step", () => {
+    const store = createStore();
+    const { a, b } = store.present.positions;
+    store.dragNodes({ a: { x: a.x + 50, y: a.y + 20 }, b: { x: b.x + 50, y: b.y + 20 } });
+    store.commitDrag(["a", "b"]);
+    expect(store.present.positions.a).toEqual({ x: a.x + 50, y: a.y + 20 });
+    expect(store.present.positions.b.x - store.present.positions.a.x).toBe(b.x - a.x);
+    expect(store.present.manualNodes.sort()).toEqual(["a", "b"]);
+    store.undo();
+    expect(store.present.positions.a).toEqual(a);
+    expect(store.present.positions.b).toEqual(b);
+  });
+
+  it("removing several nodes is one undo step", () => {
+    const store = createStore();
+    expect(store.removeNodes(["a", "c"])).toBe(true);
+    expect([...store.getState().model!.nodes.keys()]).toEqual(["b"]);
+    store.undo();
+    expect(store.present.dot).toBe(DOT);
+  });
+
+  it("node attribute changes write back to DOT, and quick repeats coalesce into one undo step", () => {
+    let time = 0;
+    const store = new GraphStore(
+      { dot: DOT, engine: "hierarchical", positions: {}, routes: {}, manualNodes: [], hasManualChanges: false },
+      { measure: estimateTextWidth, immediate: true, now: () => time },
+    );
+    store.setNodeAttributes(["a"], { fillcolor: "#111111", style: "filled" });
+    time += 200;
+    store.setNodeAttributes(["a"], { fillcolor: "#222222", style: "filled" });
+    expect(store.present.dot).toContain('a [fillcolor="#222222", style=filled];');
+    expect(store.getState().model!.nodes.get("a")!.attrs.fillcolor).toBe("#222222");
+    store.undo();
+    expect(store.present.dot).toBe(DOT);
+  });
+
+  it("node attribute changes keep hand-placed positions", () => {
+    const store = createStore();
+    store.dragNode("a", { x: 400, y: 400 });
+    store.commitDrag(["a"]);
+    store.setNodeAttributes(["a", "b"], { label: "A much longer label" });
+    expect(store.present.positions.a).toEqual({ x: 400, y: 400 });
+    expect(store.getState().visuals!.nodes.get("b")!.width).toBeGreaterThan(80);
+  });
+});

@@ -194,3 +194,85 @@ test("a newer deployed version is detected, cached and applied on Reload without
   await page.locator('.graph-canvas [data-node-id="auth"]').waitFor();
   expect(await getNodeCenter(page, "auth")).toEqual(placed);
 });
+
+test("Shift+click selects several nodes and dragging one moves all, keeping their offsets", async ({ page }) => {
+  const before = await getEditorText(page);
+  const web0 = await getNodeCenter(page, "web");
+  const api0 = await getNodeCenter(page, "api");
+  await page.locator('.graph-canvas [data-node-id="web"]').click();
+  await page.locator('.graph-canvas [data-node-id="api"]').click({ modifiers: ["Shift"] });
+  await expect(page.locator(".selected-node")).toHaveCount(2);
+  await dragNode(page, "api", 140, 30);
+  const web1 = await getNodeCenter(page, "web");
+  const api1 = await getNodeCenter(page, "api");
+  expect(web1.x - web0.x).toBeCloseTo(140, 0);
+  expect(api1.x - api0.x).toBeCloseTo(140, 0);
+  expect(api1.y - web1.y).toBeCloseTo(api0.y - web0.y, 0);
+  expect(await getEditorText(page)).toBe(before);
+  // Shift+click again removes a node from the selection.
+  await page.locator('.graph-canvas [data-node-id="web"]').click({ modifiers: ["Shift"] });
+  await expect(page.locator(".selected-node")).toHaveCount(1);
+  // One undo restores both.
+  await page.locator(".graph-canvas").focus();
+  await page.keyboard.press("Control+z");
+  expect(await getNodeCenter(page, "web")).toEqual(web0);
+  expect(await getNodeCenter(page, "api")).toEqual(api0);
+});
+
+test("rectangle select works with Shift+drag and the Select tool, while plain drag still pans", async ({ page }) => {
+  const canvas = (await page.locator(".graph-canvas").boundingBox())!;
+  const web = await getNodeCenter(page, "web");
+  const api = await getNodeCenter(page, "api");
+  // Plain drag on the sheet pans: nodes move on screen, nothing gets selected.
+  const start = { x: canvas.x + 60, y: canvas.y + 60 };
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(start.x + 40, start.y + 30, { steps: 5 });
+  await page.mouse.up();
+  const webPanned = await getNodeCenter(page, "web");
+  expect(webPanned.x - web.x).toBeCloseTo(40, 0);
+  await expect(page.locator(".selected-node")).toHaveCount(0);
+
+  // Shift+drag around web and api selects both.
+  const a = { x: Math.min(webPanned.x, api.x + 40) - 90, y: webPanned.y - 40 };
+  const b = { x: Math.max(webPanned.x, api.x + 40) + 90, y: api.y + 30 + 30 };
+  await page.keyboard.down("Shift");
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y, { steps: 6 });
+  await expect(page.locator(".marquee")).toHaveCount(1);
+  await page.mouse.up();
+  await page.keyboard.up("Shift");
+  await expect(page.locator(".selected-node")).toHaveCount(2);
+  await expect(page.locator(".inspector h2")).toHaveText("2 nodes");
+
+  // With the Select tool, a plain drag selects instead of panning; zoom still works.
+  await page.getByRole("button", { name: "Rectangle select tool" }).click();
+  const before = await getNodeCenter(page, "web");
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y, { steps: 6 });
+  await page.mouse.up();
+  expect(await getNodeCenter(page, "web")).toEqual(before);
+  await expect(page.locator(".selected-node")).toHaveCount(2);
+  await page.mouse.move(canvas.x + 300, canvas.y + 300);
+  await page.mouse.wheel(0, -300);
+  await expect(page.locator(".zoom-level")).not.toHaveText("100%");
+});
+
+test("the inspector edits a node's label and colors and writes them to the DOT text", async ({ page }) => {
+  await page.locator('.graph-canvas [data-node-id="db"]').click();
+  const inspector = page.locator(".inspector");
+  await expect(inspector.locator("h2")).toHaveText("db");
+  await inspector.getByLabel("Label").fill("Primary DB");
+  await inspector.getByLabel("Label").press("Enter");
+  await expect(page.locator(".cm-content")).toContainText('db [label="Primary DB", shape=cylinder];');
+  await inspector.getByLabel("Fill color").fill("#ffe08a");
+  await inspector.getByLabel("Text color").fill("#7d2412");
+  await expect(page.locator(".cm-content")).toContainText('fillcolor="#ffe08a"');
+  await expect(page.locator(".cm-content")).toContainText('fontcolor="#7d2412"');
+  await expect(page.locator(".cm-content")).toContainText('style="rounded,filled"');
+  await expect(page.locator('.graph-canvas [data-node-id="db"] path').first()).toHaveAttribute("fill", "#ffe08a");
+  await inspector.getByRole("button", { name: "None" }).click();
+  await expect(page.locator(".cm-content")).not.toContainText("fillcolor");
+});

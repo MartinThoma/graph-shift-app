@@ -11,6 +11,7 @@ import {
   createUniqueNodeId,
   removeEdgeFromDot,
   removeNodeFromDot,
+  setNodeAttributesInDot,
 } from "../dot/serializer";
 import { computeLayout, type EdgeRoute, type LayoutEngine, type Size } from "../layout/initialLayout";
 import { placeNewNodes } from "../layout/placement";
@@ -92,6 +93,7 @@ export const DEFAULT_DOT = `digraph checkout {
 `;
 
 const TYPING_COALESCE_MS = 1200;
+const COALESCE_MS = 1500;
 const REBUILD_DELAY_MS = 180;
 
 type Listener = () => void;
@@ -130,6 +132,7 @@ export class GraphStore {
   private readonly now: () => number;
   private rebuildTimer: ReturnType<typeof setTimeout> | null = null;
   private lastTypingAt = -Infinity;
+  private lastCoalesce: { key: string; at: number } | null = null;
   private viewportCenter: Point | null = null;
 
   constructor(initial: History<DocState> | DocState | null = null, options: StoreOptions = {}) {
@@ -348,13 +351,26 @@ export class GraphStore {
   /* Structural edits (with DOT write-back)                            */
   /* ---------------------------------------------------------------- */
 
-  private commitStructural(dot: string, options: { explicit?: Record<string, Point> } = {}): boolean {
+  private resetCoalescing(): void {
+    this.lastTypingAt = -Infinity;
+    this.lastCoalesce = null;
+  }
+
+  /**
+   * Commit a text change made from the UI. Edits sharing a `coalesceKey`
+   * within a short time (e.g. dragging a color picker) form one undo step.
+   */
+  private commitStructural(dot: string, options: { explicit?: Record<string, Point>; coalesceKey?: string } = {}): boolean {
     const parsed = this.parse(dot);
     if ("error" in parsed) return false;
     const next = this.reconcile(this.present, dot, parsed.model, parsed.visuals, options);
-    this.lastTypingAt = -Infinity;
+    const now = this.now();
+    const coalesce =
+      !!options.coalesceKey && this.lastCoalesce?.key === options.coalesceKey && now - this.lastCoalesce.at < COALESCE_MS;
+    this.resetCoalescing();
+    if (options.coalesceKey) this.lastCoalesce = { key: options.coalesceKey, at: now };
     this.setState({
-      history: pushHistory(this.state.history, next),
+      history: coalesce ? replacePresent(this.state.history, next) : pushHistory(this.state.history, next),
       model: parsed.model,
       visuals: parsed.visuals,
       error: null,
@@ -394,6 +410,37 @@ export class GraphStore {
     return this.commitStructural(removeNodeFromDot(this.present.dot, id));
   }
 
+  /** Remove several nodes (and their edges) as one undo step. */
+  removeNodes(ids: string[]): boolean {
+    if (this.checkEditable() || !this.state.model) return false;
+    const existing = ids.filter((id) => this.state.model!.nodes.has(id));
+    if (!existing.length) return false;
+    let dot = this.present.dot;
+    for (const id of existing) dot = removeNodeFromDot(dot, id);
+    return this.commitStructural(dot);
+  }
+
+  /**
+   * Change node attributes (label, colors, shape...) in the DOT text.
+   * `null` removes an attribute. Repeated changes of the same attributes on
+   * the same nodes within a short time coalesce into one undo step.
+   */
+  setNodeAttributes(ids: string[], changes: Record<string, string | null>): boolean {
+    if (this.checkEditable() || !this.state.model) return false;
+    const model = this.state.model;
+    const existing = ids.filter((id) => model.nodes.has(id));
+    if (!existing.length) return false;
+    let dot = this.present.dot;
+    for (const id of existing) {
+      // Keep HTML labels HTML when their text is edited.
+      const html = Object.keys(changes).filter((key) => model.nodes.get(id)!.htmlKeys.includes(key));
+      dot = setNodeAttributesInDot(dot, id, changes, html);
+    }
+    if (dot === this.present.dot) return true;
+    const coalesceKey = `attrs:${existing.join("\u001f")}:${Object.keys(changes).sort().join(",")}`;
+    return this.commitStructural(dot, { coalesceKey });
+  }
+
   removeEdge(key: string): boolean {
     if (this.checkEditable() || !this.state.model?.edges.some((e) => e.key === key)) return false;
     return this.commitStructural(removeEdgeFromDot(this.present.dot, key));
@@ -405,8 +452,13 @@ export class GraphStore {
 
   /** Move a node transiently while dragging (no history, no DOT change). */
   dragNode(id: string, position: Point): void {
+    this.dragNodes({ [id]: position });
+  }
+
+  /** Move several nodes transiently while dragging (group drag). */
+  dragNodes(moves: Record<string, Point>): void {
     const base = this.state.dragPositions ?? this.present.positions;
-    this.setState({ dragPositions: { ...base, [id]: position } });
+    this.setState({ dragPositions: { ...base, ...moves } });
   }
 
   /** Finish a drag: record the move as one undo step. DOT text is untouched. */
@@ -422,7 +474,7 @@ export class GraphStore {
       this.setState({ dragPositions: null });
       return;
     }
-    this.lastTypingAt = -Infinity;
+    this.resetCoalescing();
     const next: DocState = {
       ...this.present,
       positions: { ...this.present.positions, ...Object.fromEntries(changed.map((id) => [id, drag[id]])) },
@@ -461,7 +513,7 @@ export class GraphStore {
       return;
     }
     const next = this.reconcile(this.present, this.present.dot, model, visuals, { forceLayout: true, engine });
-    this.lastTypingAt = -Infinity;
+    this.resetCoalescing();
     this.setState({ history: pushHistory(this.state.history, next), dragPositions: null });
   }
 
@@ -472,7 +524,7 @@ export class GraphStore {
   undo(): void {
     this.flush();
     if (!checkCanUndo(this.state.history)) return;
-    this.lastTypingAt = -Infinity;
+    this.resetCoalescing();
     const history = undoHistory(this.state.history);
     const textChanged = history.present.dot !== this.present.dot;
     this.restorePresent(history, { keepHistory: false });
@@ -482,7 +534,7 @@ export class GraphStore {
   redo(): void {
     this.flush();
     if (!checkCanRedo(this.state.history)) return;
-    this.lastTypingAt = -Infinity;
+    this.resetCoalescing();
     const history = redoHistory(this.state.history);
     const textChanged = history.present.dot !== this.present.dot;
     this.restorePresent(history, { keepHistory: false });

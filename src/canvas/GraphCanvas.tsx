@@ -1,6 +1,7 @@
 /**
- * Interactive graph sheet: pan (drag background / middle mouse), zoom (wheel,
- * pinch, buttons), node dragging with live edge updates, selection, and the
+ * Interactive graph sheet: pan (drag background / middle mouse / Space+drag),
+ * zoom (wheel, pinch, buttons), node dragging with live edge updates,
+ * selection (click, Shift+click, rectangle) with group dragging, and the
  * add-edge picking mode. Overlays (selection, hand-placed ticks, grid) are
  * drawn separately from the graph markup so the SVG export stays clean.
  */
@@ -11,7 +12,28 @@ import { THEME } from "../render/visuals";
 import type { Viewport } from "../state/storage";
 import type { EdgePrim, NodePrim, Scene } from "./scene";
 
-export type Selection = { kind: "node"; id: string } | { kind: "edge"; key: string };
+export type Selection = { kind: "nodes"; ids: string[] } | { kind: "edge"; key: string };
+
+/** What a plain drag on empty sheet does: pan the view or draw a selection rectangle. */
+export type PointerTool = "pan" | "select";
+
+/** Node IDs whose boxes intersect a rectangle (content coordinates). */
+export function findNodesInRect(nodes: NodePrim[], rect: { x: number; y: number; w: number; h: number }): string[] {
+  return nodes
+    .filter((n) => {
+      const hw = n.visual.width / 2;
+      const hh = n.visual.height / 2;
+      return n.x + hw >= rect.x && n.x - hw <= rect.x + rect.w && n.y + hh >= rect.y && n.y - hh <= rect.y + rect.h;
+    })
+    .map((n) => n.id);
+}
+
+/** Toggle one node in a node selection (Shift+click). */
+export function toggleNodeSelection(selection: Selection | null, id: string): Selection | null {
+  const ids = selection?.kind === "nodes" ? selection.ids : [];
+  const next = ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id];
+  return next.length ? { kind: "nodes", ids: next } : null;
+}
 
 export const MIN_ZOOM = 0.05;
 export const MAX_ZOOM = 8;
@@ -45,18 +67,30 @@ interface GraphCanvasProps {
   manualNodes: Set<string>;
   mode: "select" | "add-edge";
   edgeSource: string | null;
+  pointerTool: PointerTool;
   onPickNode: (id: string) => void;
-  onDragNode: (id: string, position: Point) => void;
+  onDragNodes: (moves: Record<string, Point>) => void;
   onCommitDrag: (ids: string[]) => void;
   onCancelDrag: () => void;
   onAddNodeAt: (position: Point) => void;
-  onNudge: (id: string, dx: number, dy: number) => void;
+  onNudge: (ids: string[], dx: number, dy: number) => void;
   onSizeChange: (size: { width: number; height: number }) => void;
   emptyMessage: string | null;
 }
 
 type Gesture =
-  | { kind: "node"; id: string; pointerId: number; start: Point; offset: Point; moved: boolean }
+  | {
+      kind: "node";
+      id: string;
+      pointerId: number;
+      start: Point;
+      startContent: Point;
+      /** Start positions of every node that moves with this drag. */
+      origins: Record<string, Point>;
+      shift: boolean;
+      moved: boolean;
+    }
+  | { kind: "marquee"; pointerId: number; start: Point; startContent: Point; additive: boolean; moved: boolean }
   | { kind: "edge"; key: string; pointerId: number; start: Point; moved: boolean }
   | { kind: "pan"; pointerId: number; start: Point; viewport: Viewport; moved: boolean }
   | { kind: "pinch"; ids: [number, number]; distance: number; mid: Point; viewport: Viewport };
@@ -103,8 +137,9 @@ export function GraphCanvas(props: GraphCanvasProps) {
     manualNodes,
     mode,
     edgeSource,
+    pointerTool,
     onPickNode,
-    onDragNode,
+    onDragNodes,
     onCommitDrag,
     onCancelDrag,
     onAddNodeAt,
@@ -120,6 +155,36 @@ export function GraphCanvas(props: GraphCanvasProps) {
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [pointer, setPointer] = useState<Point | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
+  const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const spaceHeldRef = useRef(false);
+  const [spaceHeld, setSpaceHeld] = useState(false);
+
+  // Space held = temporary pan, as in most drawing tools.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.code !== "Space") return;
+      const el = event.target as HTMLElement | null;
+      if (el?.closest?.(".cm-editor, input, textarea, select, button")) return;
+      const down = event.type === "keydown";
+      if (down) event.preventDefault();
+      if (spaceHeldRef.current !== down) {
+        spaceHeldRef.current = down;
+        setSpaceHeld(down);
+      }
+    };
+    const onBlur = (): void => {
+      spaceHeldRef.current = false;
+      setSpaceHeld(false);
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("keyup", onKey);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onKey);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, []);
 
   const toScreen = useCallback((event: { clientX: number; clientY: number }): Point => {
     const rect = svgRef.current!.getBoundingClientRect();
@@ -186,7 +251,21 @@ export function GraphCanvas(props: GraphCanvasProps) {
     const edgeKey = target?.getAttribute("data-edge-key") ?? null;
 
     svg.setPointerCapture(event.pointerId);
-    if (event.button === 1 || (event.button === 0 && !nodeId && !edgeKey) || (mode === "add-edge" && !nodeId)) {
+    const onSheet = !nodeId && !edgeKey;
+    const wantsMarquee =
+      event.button === 0 && onSheet && mode === "select" && !spaceHeldRef.current && (event.shiftKey || pointerTool === "select");
+    if (wantsMarquee) {
+      gestureRef.current = {
+        kind: "marquee",
+        pointerId: event.pointerId,
+        start: screen,
+        startContent: toContent(screen),
+        additive: event.shiftKey,
+        moved: false,
+      };
+      return;
+    }
+    if (event.button === 1 || spaceHeldRef.current || (event.button === 0 && onSheet) || (mode === "add-edge" && !nodeId)) {
       gestureRef.current = { kind: "pan", pointerId: event.pointerId, start: screen, viewport: viewportRef.current, moved: false };
       return;
     }
@@ -197,15 +276,23 @@ export function GraphCanvas(props: GraphCanvasProps) {
       return;
     }
     if (nodeId) {
-      const node = nodeById.get(nodeId);
-      if (!node) return;
-      const content = toContent(screen);
+      if (!nodeById.has(nodeId)) return;
+      // Dragging a node of a multi-selection moves the whole selection.
+      const selected = selection?.kind === "nodes" && selection.ids.includes(nodeId) ? selection.ids : [nodeId];
+      const ids = event.shiftKey && !selected.includes(nodeId) ? [...selected, nodeId] : selected;
+      const origins: Record<string, Point> = {};
+      for (const id of ids) {
+        const n = nodeById.get(id);
+        if (n) origins[id] = { x: n.x, y: n.y };
+      }
       gestureRef.current = {
         kind: "node",
         id: nodeId,
         pointerId: event.pointerId,
         start: screen,
-        offset: { x: content.x - node.x, y: content.y - node.y },
+        startContent: toContent(screen),
+        origins,
+        shift: event.shiftKey,
         moved: false,
       };
       return;
@@ -240,7 +327,15 @@ export function GraphCanvas(props: GraphCanvasProps) {
     if (gesture.kind === "node") {
       const content = toContent(screen);
       if (dragging !== gesture.id) setDragging(gesture.id);
-      onDragNode(gesture.id, { x: Math.round(content.x - gesture.offset.x), y: Math.round(content.y - gesture.offset.y) });
+      const dx = Math.round(content.x - gesture.startContent.x);
+      const dy = Math.round(content.y - gesture.startContent.y);
+      const moves: Record<string, Point> = {};
+      for (const [id, origin] of Object.entries(gesture.origins)) moves[id] = { x: origin.x + dx, y: origin.y + dy };
+      onDragNodes(moves);
+    } else if (gesture.kind === "marquee") {
+      const content = toContent(screen);
+      const a = gesture.startContent;
+      setMarquee({ x: Math.min(a.x, content.x), y: Math.min(a.y, content.y), w: Math.abs(content.x - a.x), h: Math.abs(content.y - a.y) });
     } else if (gesture.kind === "pan") {
       onViewportChange({ ...gesture.viewport, x: gesture.viewport.x + screen.x - gesture.start.x, y: gesture.viewport.y + screen.y - gesture.start.y });
     }
@@ -259,9 +354,27 @@ export function GraphCanvas(props: GraphCanvasProps) {
     gestureRef.current = null;
     setDragging(null);
     if (gesture.kind === "node") {
+      const ids = Object.keys(gesture.origins);
       if (cancelled) onCancelDrag();
-      else if (gesture.moved) onCommitDrag([gesture.id]);
-      else onSelect({ kind: "node", id: gesture.id });
+      else if (gesture.moved) {
+        onCommitDrag(ids);
+        if (ids.length > 1) onSelect({ kind: "nodes", ids });
+      } else if (gesture.shift) onSelect(toggleNodeSelection(selection, gesture.id));
+      else onSelect({ kind: "nodes", ids: [gesture.id] });
+    } else if (gesture.kind === "marquee") {
+      setMarquee(null);
+      if (cancelled) return;
+      if (!gesture.moved) {
+        if (!gesture.additive) onSelect(null);
+        return;
+      }
+      const end = toContent(toScreen(event));
+      const a = gesture.startContent;
+      const rect = { x: Math.min(a.x, end.x), y: Math.min(a.y, end.y), w: Math.abs(end.x - a.x), h: Math.abs(end.y - a.y) };
+      const hits = findNodesInRect(scene?.nodes ?? [], rect);
+      const base = gesture.additive && selection?.kind === "nodes" ? selection.ids : [];
+      const ids = [...new Set([...base, ...hits])];
+      onSelect(ids.length ? { kind: "nodes", ids } : null);
     } else if (gesture.kind === "edge") {
       if (!gesture.moved && !cancelled) onSelect({ kind: "edge", key: gesture.key });
     } else if (gesture.kind === "pan" && !gesture.moved && !cancelled && mode === "select") {
@@ -276,7 +389,7 @@ export function GraphCanvas(props: GraphCanvasProps) {
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<SVGSVGElement>): void => {
-    if (selection?.kind !== "node") return;
+    if (selection?.kind !== "nodes") return;
     const step = event.shiftKey ? 10 : 1;
     const delta: Record<string, [number, number]> = {
       ArrowLeft: [-step, 0],
@@ -287,7 +400,7 @@ export function GraphCanvas(props: GraphCanvasProps) {
     const d = delta[event.key];
     if (!d) return;
     event.preventDefault();
-    onNudge(selection.id, d[0], d[1]);
+    onNudge(selection.ids, d[0], d[1]);
   };
 
   // Grid in content coordinates so it pans and zooms with the drawing.
@@ -302,7 +415,7 @@ export function GraphCanvas(props: GraphCanvasProps) {
   const majorStep = 20 * k >= 7 ? 100 : 20 * k * 5 >= 7 ? 100 : 500;
   const hairline = 1 / k;
 
-  const selectedNode = selection?.kind === "node" ? nodeById.get(selection.id) : undefined;
+  const selectedNodes = selection?.kind === "nodes" ? selection.ids.map((id) => nodeById.get(id)).filter((n): n is NodePrim => !!n) : [];
   const selectedEdge = selection?.kind === "edge" ? scene?.edges.find((e) => e.key === selection.key) : undefined;
   const sourceNode = edgeSource ? nodeById.get(edgeSource) : undefined;
   const halo = scene?.background ?? THEME.paper;
@@ -310,9 +423,11 @@ export function GraphCanvas(props: GraphCanvasProps) {
   return (
     <svg
       ref={svgRef}
-      className={`graph-canvas${mode === "add-edge" ? " is-picking" : ""}${dragging ? " is-dragging" : ""}`}
+      className={`graph-canvas${mode === "add-edge" ? " is-picking" : ""}${dragging ? " is-dragging" : ""}${
+        pointerTool === "select" && !spaceHeld ? " is-select-tool" : ""
+      }${spaceHeld ? " is-space-pan" : ""}`}
       role="application"
-      aria-label="Graph canvas. Drag nodes to move them, drag the background to pan, scroll to zoom."
+      aria-label="Graph canvas. Drag nodes to move them, Shift+click to select several, Shift+drag the background to select a rectangle, drag the background to pan, scroll to zoom."
       tabIndex={0}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
@@ -364,15 +479,27 @@ export function GraphCanvas(props: GraphCanvasProps) {
                 ) : null,
               )}
               {selectedEdge && <path className="selected-edge" d={selectedEdge.geometry.path} strokeWidth={selectedEdge.visual.strokeWidth + 2.5 / k} />}
-              {selectedNode && (
+              {selectedNodes.map((node) => (
                 <rect
+                  key={node.id}
                   className="selected-node"
-                  x={selectedNode.x - selectedNode.visual.width / 2 - 5}
-                  y={selectedNode.y - selectedNode.visual.height / 2 - 5}
-                  width={selectedNode.visual.width + 10}
-                  height={selectedNode.visual.height + 10}
+                  x={node.x - node.visual.width / 2 - 5}
+                  y={node.y - node.visual.height / 2 - 5}
+                  width={node.visual.width + 10}
+                  height={node.visual.height + 10}
                   rx={8}
                   strokeWidth={2 / k}
+                />
+              ))}
+              {marquee && (
+                <rect
+                  className="marquee"
+                  x={marquee.x}
+                  y={marquee.y}
+                  width={marquee.w}
+                  height={marquee.h}
+                  strokeWidth={1 / k}
+                  strokeDasharray={`${4 / k} ${3 / k}`}
                 />
               )}
               {sourceNode && (

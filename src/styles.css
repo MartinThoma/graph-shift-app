@@ -526,6 +526,15 @@ select:hover {
   cursor: grabbing;
 }
 
+.graph-canvas.is-select-tool {
+  cursor: crosshair;
+}
+
+.graph-canvas.is-space-pan,
+.graph-canvas.is-space-pan .node {
+  cursor: grab;
+}
+
 .graph-canvas.is-picking,
 .graph-canvas.is-picking .node {
   cursor: crosshair;
@@ -583,6 +592,12 @@ select:hover {
   stroke: var(--accent);
 }
 
+.marquee {
+  fill: var(--accent);
+  fill-opacity: 0.06;
+  stroke: var(--accent);
+}
+
 .canvas-empty {
   fill: var(--muted);
   font-size: 14px;
@@ -628,6 +643,141 @@ select:hover {
   bottom: 14px;
   display: flex;
   gap: 4px;
+}
+
+.tool-toggle {
+  display: flex;
+  gap: 4px;
+  margin-right: 8px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Inspector                                                           */
+/* ------------------------------------------------------------------ */
+
+.inspector {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 248px;
+  max-height: calc(100% - 84px);
+  overflow-y: auto;
+  padding: 12px 14px 14px;
+  display: grid;
+  gap: 12px;
+  background: var(--white);
+  border: 1px solid var(--ink);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgb(28 31 35 / 0.12);
+  z-index: 2;
+}
+
+.inspector header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: -2px;
+}
+
+.inspector h2 {
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector h2 code {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.inspector header .btn {
+  border-color: transparent;
+}
+
+.inspector .field {
+  display: grid;
+  gap: 4px;
+}
+
+.inspector .field > span,
+.color-row > span {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.inspector input:not([type="color"]),
+.inspector select {
+  width: 100%;
+  height: 32px;
+  border: 1px solid var(--control);
+  border-radius: var(--radius);
+  background-color: var(--white);
+}
+
+.inspector input:not([type="color"]) {
+  padding: 0 8px;
+}
+
+.inspector input:not([type="color"]):focus {
+  outline: none;
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.inspector input::placeholder {
+  color: var(--muted-2);
+}
+
+.inspector small {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.color-row {
+  display: grid;
+  grid-template-columns: 1fr 44px auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-row input[type="color"] {
+  width: 44px;
+  height: 30px;
+  padding: 2px;
+  border: 1px solid var(--control);
+  border-radius: var(--radius);
+  background: var(--white);
+  cursor: pointer;
+}
+
+.color-row input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color-row input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 0;
+}
+
+.color-row input[type="color"]::-moz-color-swatch {
+  border: none;
+  border-radius: 0;
+}
+
+.color-row .btn {
+  min-width: 72px;
+}
+
+.inspector-note {
+  margin: 0;
+  color: var(--muted);
 }
 
 .zoom-level {
@@ -789,6 +939,12 @@ select:hover {
   .zoom-controls {
     right: 12px;
     bottom: 12px;
+  }
+  .inspector {
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-height: calc(100% - 140px);
   }
   .zoom-controls .btn {
     height: 36px;

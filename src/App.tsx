@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { computeFitViewport, GraphCanvas, zoomViewportAt, type Selection } from "./canvas/GraphCanvas";
+import { computeFitViewport, GraphCanvas, zoomViewportAt, type PointerTool, type Selection } from "./canvas/GraphCanvas";
 import { SceneBuilder } from "./canvas/scene";
 import { DotEditor, type DotEditorHandle } from "./editor/DotEditor";
 import { createExportFilename, createSvgExport, downloadSvg } from "./export/exportSvg";
@@ -10,14 +10,17 @@ import { loadSession, saveSession, type Viewport } from "./state/storage";
 import { GraphStore } from "./state/store";
 import { AddNodePopover } from "./ui/AddNodePopover";
 import { ConfirmDialog } from "./ui/ConfirmDialog";
+import { NodeInspector } from "./ui/NodeInspector";
 import {
   AddEdgeIcon,
   AddNodeIcon,
   DownloadIcon,
   ErrorIcon,
   FitIcon,
+  HandIcon,
   HandTick,
   InstallIcon,
+  MarqueeIcon,
   RedoIcon,
   RemoveEdgeIcon,
   RemoveNodeIcon,
@@ -68,6 +71,7 @@ export function App() {
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [selection, setSelection] = useState<Selection | null>(null);
   const [mode, setMode] = useState<"select" | "add-edge">("select");
+  const [pointerTool, setPointerTool] = useState<PointerTool>("pan");
   const [edgeSource, setEdgeSource] = useState<string | null>(null);
   const [pendingLayout, setPendingLayout] = useState<PendingLayout | null>(null);
   const [addNodeOpen, setAddNodeOpen] = useState(false);
@@ -90,7 +94,10 @@ export function App() {
   // Drop selections that no longer exist.
   useEffect(() => {
     if (!state.model || !selection) return;
-    if (selection.kind === "node" && !state.model.nodes.has(selection.id)) setSelection(null);
+    if (selection.kind === "nodes") {
+      const ids = selection.ids.filter((id) => state.model!.nodes.has(id));
+      if (ids.length !== selection.ids.length) setSelection(ids.length ? { kind: "nodes", ids } : null);
+    }
     if (selection.kind === "edge" && !state.model.edges.some((e) => e.key === selection.key)) setSelection(null);
   }, [state.model, selection]);
 
@@ -224,8 +231,8 @@ export function App() {
   };
 
   const removeSelectedNode = (): void => {
-    if (selection?.kind !== "node" || !requireEditable()) return;
-    store.removeNode(selection.id);
+    if (selection?.kind !== "nodes" || !requireEditable()) return;
+    store.removeNodes(selection.ids);
     setSelection(null);
   };
 
@@ -236,7 +243,7 @@ export function App() {
   };
 
   const removeSelection = (): void => {
-    if (selection?.kind === "node") removeSelectedNode();
+    if (selection?.kind === "nodes") removeSelectedNode();
     else if (selection?.kind === "edge") removeSelectedEdge();
   };
 
@@ -254,7 +261,7 @@ export function App() {
   const handleAddNodeAt = (position: Point): void => {
     if (!requireEditable()) return;
     const id = store.createNodeId();
-    if (store.addNode(id, undefined, position)) setSelection({ kind: "node", id });
+    if (store.addNode(id, undefined, position)) setSelection({ kind: "nodes", ids: [id] });
   };
 
   const handleAddNode = (id: string, label: string): string | null => {
@@ -262,16 +269,22 @@ export function App() {
     if (!id.trim()) return "Enter an ID.";
     if (state.model?.nodes.has(id)) return `A node named “${id}” already exists.`;
     if (!store.addNode(id, label || undefined)) return "Could not add the node.";
-    setSelection({ kind: "node", id });
+    setSelection({ kind: "nodes", ids: [id] });
     setAddNodeOpen(false);
     return null;
   };
 
-  const handleNudge = (id: string, dx: number, dy: number): void => {
-    const p = store.getRenderPositions()[id];
-    if (!p) return;
-    store.dragNode(id, { x: p.x + dx, y: p.y + dy });
-    store.commitDrag([id]);
+  const handleNudge = (ids: string[], dx: number, dy: number): void => {
+    const current = store.getRenderPositions();
+    const moves: Record<string, Point> = {};
+    for (const id of ids) if (current[id]) moves[id] = { x: current[id].x + dx, y: current[id].y + dy };
+    store.dragNodes(moves);
+    store.commitDrag(Object.keys(moves));
+  };
+
+  const handleInspectorChange = (changes: Record<string, string | null>): void => {
+    if (selection?.kind !== "nodes" || !requireEditable()) return;
+    store.setNodeAttributes(selection.ids, changes);
   };
 
   const handleDownload = (): void => {
@@ -307,6 +320,14 @@ export function App() {
       return;
     }
     if (typing) return;
+    const currentModel = store.getState().model;
+    if (mod && event.key.toLowerCase() === "a" && currentModel) {
+      event.preventDefault();
+      setSelection(currentModel.nodes.size ? { kind: "nodes", ids: [...currentModel.nodes.keys()] } : null);
+      return;
+    }
+    if (!mod && !event.altKey && event.key.toLowerCase() === "v") setPointerTool("select");
+    else if (!mod && !event.altKey && event.key.toLowerCase() === "h") setPointerTool("pan");
     if (event.key === "Escape") {
       if (mode === "add-edge") cancelEdgeMode();
       else setSelection(null);
@@ -372,14 +393,22 @@ export function App() {
         Add edge: {COARSE_POINTER ? "tap" : "click"} the source node.{COARSE_POINTER ? "" : " Esc cancels."}
       </>
     );
-  } else if (selection?.kind === "node") {
+  } else if (selection?.kind === "nodes") {
     status = (
       <>
-        Selected <b>{selection.id}</b>
+        {selection.ids.length === 1 ? (
+          <>
+            Selected <b>{selection.ids[0]}</b>
+          </>
+        ) : (
+          <>
+            <b>{selection.ids.length} nodes</b> selected; drag one to move all
+          </>
+        )}
         {!COARSE_POINTER && (
           <>
             <span className="status-sep" />
-            Arrow keys nudge; Delete removes
+            Shift+click adds or removes; arrows nudge; Delete removes
           </>
         )}
         {handCountText && (
@@ -413,7 +442,12 @@ export function App() {
   } else if (COARSE_POINTER) {
     status = <>Drag nodes to tidy the picture. Use the add buttons above to add nodes and edges.</>;
   } else {
-    status = <>Drag nodes to tidy the picture. Double-click the sheet to add a node.</>;
+    status =
+      pointerTool === "select" ? (
+        <>Drag on the sheet to select an area. Space+drag or the middle mouse button pans.</>
+      ) : (
+        <>Drag nodes to tidy the picture. Shift+drag the sheet to select an area; double-click it to add a node.</>
+      );
   }
 
   const emptyMessage = !model ? (state.error ? "Fix the DOT source to see the graph." : null) : model.nodes.size === 0 ? "Empty graph. Add a node, or write DOT on the left." : null;
@@ -493,9 +527,16 @@ export function App() {
         </div>
 
         <div className="group destructive-group">
-          <button type="button" className="btn danger" onClick={removeSelectedNode} disabled={selection?.kind !== "node"} title="Remove the selected node and its edges (Delete)">
+          <button
+            type="button"
+            className="btn danger"
+            onClick={removeSelectedNode}
+            disabled={selection?.kind !== "nodes"}
+            title="Remove the selected nodes and their edges (Delete)"
+            aria-label={selection?.kind === "nodes" && selection.ids.length > 1 ? `Remove ${selection.ids.length} nodes` : "Remove node"}
+          >
             <RemoveNodeIcon />
-            <span className="label">Remove node</span>
+            <span className="label">{selection?.kind === "nodes" && selection.ids.length > 1 ? `Remove ${selection.ids.length} nodes` : "Remove node"}</span>
           </button>
           <button type="button" className="btn danger" onClick={removeSelectedEdge} disabled={selection?.kind !== "edge"} title="Remove the selected edge (Delete)">
             <RemoveEdgeIcon />
@@ -603,8 +644,9 @@ export function App() {
             manualNodes={manualNodes}
             mode={mode}
             edgeSource={edgeSource}
+            pointerTool={pointerTool}
             onPickNode={handlePickNode}
-            onDragNode={(id, p) => store.dragNode(id, p)}
+            onDragNodes={(moves) => store.dragNodes(moves)}
             onCommitDrag={(ids) => store.commitDrag(ids)}
             onCancelDrag={() => store.cancelDrag()}
             onAddNodeAt={handleAddNodeAt}
@@ -615,7 +657,32 @@ export function App() {
           <div className={`status${notice ? " is-notice" : ""}`} role="status" aria-live="polite">
             {notice ?? status}
           </div>
-          <div className="zoom-controls" role="group" aria-label="Zoom">
+          {selection?.kind === "nodes" && mode === "select" && model && (
+            <NodeInspector model={model} ids={selection.ids} onChange={handleInspectorChange} onClose={() => setSelection(null)} />
+          )}
+          <div className="zoom-controls" role="group" aria-label="View">
+            <div className="tool-toggle" role="group" aria-label="Drag on the sheet">
+              <button
+                type="button"
+                className="btn icon-only"
+                aria-pressed={pointerTool === "pan"}
+                onClick={() => setPointerTool("pan")}
+                title="Pan: dragging the sheet moves the view (H)"
+                aria-label="Pan tool"
+              >
+                <HandIcon />
+              </button>
+              <button
+                type="button"
+                className="btn icon-only"
+                aria-pressed={pointerTool === "select"}
+                onClick={() => setPointerTool("select")}
+                title="Select: dragging the sheet draws a selection rectangle (V)"
+                aria-label="Rectangle select tool"
+              >
+                <MarqueeIcon />
+              </button>
+            </div>
             <button type="button" className="btn icon-only" onClick={() => zoomBy(1 / 1.25)} title="Zoom out" aria-label="Zoom out">
               <ZoomOutIcon />
             </button>

@@ -304,6 +304,7 @@ Quiet, ruled and compact. They read like labelled boxes on a form.
 
 ### Popover and Dialog
 - **Popover:** 280px of white with a 1px ink border, 6px corners, 14px padding, 10px gaps and the popover lift. It rises 4px into place over 160ms. Fields are stacked under Control Labels, and actions are right-aligned.
+- **Inspector:** a 248px floating panel at the canvas's top-right (full width, 12px from the edges, below 760px) with the popover's border, corners and lift. Its title is the node ID in mono 600, or "N nodes". Fields stack under Control Labels; colour rows are label, 44×30px swatch, and a reset button ("None" / "Default"). A Graphite note says where changes go. It appears only while nodes are selected.
 - **Dialog:** at most 440px, with the same border and corners, 20px padding, a 15px/700 title, and Soft Ink prose at 1.5. It rises over 180ms with the dialog lift.
 
 ### Navigation (toolbar and pane tabs)
@@ -319,8 +320,12 @@ An inline strip at the foot of the editor: Vermilion Wash ground, a 1px vermilio
 ### Sheet overlays (signature)
 These are drawn over the graph on screen and are never exported:
 - **Hand tick:** a 2px square-capped vermilion corner at a hand-placed node's top-left. It is the system's signature mark.
-- **Selection frame:** a 2px vermilion outline around the selected node. The selected edge gets a vermilion halo at 0.55 opacity, 2.5px wider than the edge.
+- **Selection frame:** a 2px vermilion outline around each selected node (multi-selection shows one frame per node).
+- **Selection rectangle:** while Shift+dragging (or dragging with the Select tool), a 1px dashed vermilion rectangle with a 6% vermilion fill. The Select tool's cursor is a crosshair; Space+drag shows the grab cursor. The selected edge gets a vermilion halo at 0.55 opacity, 2.5px wider than the edge.
 - **Add-edge picking:** the source node gets a dashed vermilion frame, and a 1.5px dashed vermilion preview line follows the pointer. The cursor is a crosshair.
+
+### View controls
+Bottom-right of the canvas: a two-button tool toggle (Pan hand / Select rectangle, pressed state is the inset ink line) 8px left of the zoom group (−, percentage, +, fit).
 
 ### Icons
 Inline 16px SVG line icons with a 1.4 stroke in `currentColor`. They are drawn, never glyphs.

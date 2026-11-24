@@ -121,3 +121,23 @@ export const HandTick = () => (
     <path d="M1.5 9V1.5H9" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" />
   </svg>
 );
+
+export const HandIcon = () => (
+  <Icon>
+    <path d="M5.5 8.5V3.8a1.1 1.1 0 0 1 2.2 0V7.5" />
+    <path d="M7.7 7.2V2.9a1.1 1.1 0 0 1 2.2 0v4.3" />
+    <path d="M9.9 7.2V3.9a1.1 1.1 0 0 1 2.2 0v5.3c0 2.9-1.9 5.3-4.6 5.3-1.6 0-2.6-.7-3.5-1.9L2.2 9.8a1.1 1.1 0 0 1 1.7-1.4l1.6 1.7" />
+  </Icon>
+);
+
+export const MarqueeIcon = () => (
+  <Icon>
+    <path d="M2 4.5V2h2.5M7 2h2M11.5 2H14v2.5M14 7v2M14 11.5V14h-2.5M9 14H7M4.5 14H2v-2.5M2 9V7" />
+  </Icon>
+);
+
+export const CloseIcon = () => (
+  <Icon>
+    <path d="M4 4l8 8M12 4l-8 8" />
+  </Icon>
+);

@@ -6,6 +6,7 @@ import { estimateTextWidth } from "../render/text";
 import { computeEdgeGeometry, deformRoute, type NodeGeometry } from "./edgeGeometry";
 import { computeGraphVisuals, SceneBuilder } from "./scene";
 import { renderSceneSvg } from "../render/svgMarkup";
+import { findNodesInRect, toggleNodeSelection } from "./GraphCanvas";
 
 function createBox(x: number, y: number): NodeGeometry {
   return { center: { x, y }, outline: createOutline("box", 60, 40, false), width: 60, height: 40 };
@@ -176,5 +177,26 @@ describe("Scene and SVG export", () => {
     const m = buildGraphModel('digraph { a [label="<&>\\"x"] }');
     const scene = new SceneBuilder().build(m, computeGraphVisuals(m, estimateTextWidth), { a: { x: 0, y: 0 } }, {});
     expect(renderSceneSvg(scene)).toContain("&lt;&amp;&gt;&quot;x");
+  });
+});
+
+describe("Selection helpers", () => {
+  const model = buildGraphModel("digraph { a; b; c }");
+  const visuals = computeGraphVisuals(model, estimateTextWidth);
+  const scene = new SceneBuilder().build(model, visuals, { a: { x: 0, y: 0 }, b: { x: 200, y: 0 }, c: { x: 0, y: 300 } }, {});
+
+  it("rectangle selection picks every node whose box intersects the rectangle", () => {
+    expect(findNodesInRect(scene.nodes, { x: -10, y: -10, w: 190, h: 20 }).sort()).toEqual(["a", "b"]);
+    expect(findNodesInRect(scene.nodes, { x: 500, y: 500, w: 10, h: 10 })).toEqual([]);
+  });
+
+  it("Shift+click toggles nodes in and out of the selection", () => {
+    let selection = toggleNodeSelection(null, "a");
+    expect(selection).toEqual({ kind: "nodes", ids: ["a"] });
+    selection = toggleNodeSelection(selection, "b");
+    expect(selection).toEqual({ kind: "nodes", ids: ["a", "b"] });
+    selection = toggleNodeSelection(selection, "a");
+    expect(selection).toEqual({ kind: "nodes", ids: ["b"] });
+    expect(toggleNodeSelection(selection, "b")).toBeNull();
   });
 });
