@@ -136,6 +136,14 @@ export const MarqueeIcon = () => (
   </Icon>
 );
 
+/** Toggle for highlighting hand-placed nodes: a node with the corner tick. */
+export const HandMarkIcon = () => (
+  <Icon>
+    <rect x="4.5" y="6" width="9.5" height="7" rx="1.8" />
+    <path d="M2 6.5V3.5h3" strokeWidth="1.8" strokeLinecap="square" />
+  </Icon>
+);
+
 export const CloseIcon = () => (
   <Icon>
     <path d="M4 4l8 8M12 4l-8 8" />

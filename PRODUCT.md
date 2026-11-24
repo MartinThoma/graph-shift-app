@@ -88,7 +88,7 @@ The application provides:
   * When `hasManualChanges` is `true`, **never** automatically recalculate or overwrite node positions on layout-option changes, window resizes, app updates, or graph edits unless the user explicitly confirms a layout reset/recomputation dialog.
   * When adding a new node via the UI while `hasManualChanges` is `true`, place the new node at a non-overlapping position (e.g., near viewport center or offset from existing nodes) without moving existing nodes.
   * When removing a node or edge via the UI, keep all remaining nodes at their current positions.
-  * Nodes placed by hand carry a small vermilion corner tick on the canvas (not exported).
+  * A **Highlight nodes placed by hand** toggle next to the zoom buttons draws a small vermilion corner tick on such nodes (never exported). It is off by default and remembered per browser; the toolbar's "Placed by hand" state and the status-chip count are always shown.
   * Without manual changes, every valid text change re-runs the selected layout.
   * New nodes are placed near the centroid of their already-placed neighbors (below a single neighbor), otherwise near the viewport center, searching outward for the first spot that keeps a 24px margin to every existing node.
 
@@ -143,6 +143,7 @@ The application provides:
   * Label (single node only; DOT escapes such as `\n` are kept as typed; empty removes the label so the ID shows). Committed on Enter or when the field loses focus.
   * Shape (common shapes; "Mixed" when the selected nodes differ).
   * Fill colour (sets `fillcolor` and adds `filled` to the node's style, keeping other style flags such as `rounded`; "None" removes both), text colour (`fontcolor`) and border colour (`color`), each with a reset.
+  * Clicking a colour swatch opens a palette: *Typical* colours (soft fills for Fill; strong inks for Text and Border), *In this graph* (every other colour already used by nodes, edges, clusters or the graph, up to 20), and a *Custom* picker for any colour.
   * With several nodes selected, shape and colours apply to all of them.
   * Attribute edits change the node's last explicit setting in place, otherwise they are appended to its last statement (or a new `id [...]` statement for nodes that only appear in edges). Changing the same attributes repeatedly within 1.5s (e.g. dragging the colour picker) is one undo step.
 

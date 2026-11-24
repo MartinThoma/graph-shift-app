@@ -46,9 +46,16 @@ test("dragging a node moves it and its edges without touching the DOT text", asy
   expect(end.x - start.x).toBeGreaterThan(100);
   expect(await getEditorText(page)).toBe(before);
   await expect(page.locator(".lock-state")).toHaveText(/Placed by hand/);
+  // Hand-placed markers are off by default and can be switched on (remembered per browser).
+  await expect(page.locator(".hand-tick")).toHaveCount(0);
+  await page.getByRole("button", { name: "Highlight nodes placed by hand" }).click();
+  await expect(page.locator(".hand-tick")).toHaveCount(1);
+  await page.reload();
   await expect(page.locator(".hand-tick")).toHaveCount(1);
   // The api -> auth edge is re-drawn to the new position.
   expect(await getApiAuthPath()).not.toBe(edgePathBefore);
+  await page.getByRole("button", { name: "Highlight nodes placed by hand" }).click();
+  await expect(page.locator(".hand-tick")).toHaveCount(0);
 });
 
 test("switching layouts after a drag asks first; keeping positions moves nothing", async ({ page }) => {
@@ -267,12 +274,22 @@ test("the inspector edits a node's label and colors and writes them to the DOT t
   await inspector.getByLabel("Label").fill("Primary DB");
   await inspector.getByLabel("Label").press("Enter");
   await expect(page.locator(".cm-content")).toContainText('db [label="Primary DB", shape=cylinder];');
-  await inspector.getByLabel("Fill color").fill("#ffe08a");
-  await inspector.getByLabel("Text color").fill("#7d2412");
-  await expect(page.locator(".cm-content")).toContainText('fillcolor="#ffe08a"');
-  await expect(page.locator(".cm-content")).toContainText('fontcolor="#7d2412"');
+  // Typical colors are one click away.
+  await inspector.getByRole("button", { name: "Fill color" }).click();
+  await inspector.getByRole("button", { name: "Fill #fff3bf" }).click();
+  await expect(page.locator(".cm-content")).toContainText('fillcolor="#fff3bf"');
   await expect(page.locator(".cm-content")).toContainText('style="rounded,filled"');
-  await expect(page.locator('.graph-canvas [data-node-id="db"] path').first()).toHaveAttribute("fill", "#ffe08a");
+  await expect(page.locator('.graph-canvas [data-node-id="db"] path').first()).toHaveAttribute("fill", "#fff3bf");
+  // Any color via the custom picker.
+  await inspector.getByRole("button", { name: "Text color" }).click();
+  await inspector.getByLabel("Custom text color").fill("#7d2412");
+  await expect(page.locator(".cm-content")).toContainText('fontcolor="#7d2412"');
+  // Colors already used in the graph are offered too.
+  await inspector.getByRole("button", { name: "Border color" }).click();
+  const used = inspector.getByRole("group", { name: "Border colors" });
+  await expect(used).toContainText("In this graph");
+  await used.getByRole("button", { name: "Border #7d2412" }).click();
+  await expect(page.locator(".cm-content")).toContainText('color="#7d2412"');
   await inspector.getByRole("button", { name: "None" }).click();
   await expect(page.locator(".cm-content")).not.toContainText("fillcolor");
 });

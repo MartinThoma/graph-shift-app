@@ -651,6 +651,14 @@ select:hover {
   margin-right: 8px;
 }
 
+.hand-marks-toggle {
+  margin-right: 8px;
+}
+
+.hand-marks-toggle[aria-pressed="true"] svg path {
+  stroke: var(--accent);
+}
+
 /* ------------------------------------------------------------------ */
 /* Inspector                                                           */
 /* ------------------------------------------------------------------ */
@@ -747,28 +755,94 @@ select:hover {
   gap: 8px;
 }
 
-.color-row input[type="color"] {
+.color-field {
+  display: grid;
+  gap: 8px;
+}
+
+.swatch-button {
   width: 44px;
   height: 30px;
-  padding: 2px;
+  padding: 3px;
   border: 1px solid var(--control);
   border-radius: var(--radius);
   background: var(--white);
   cursor: pointer;
 }
 
-.color-row input[type="color"]::-webkit-color-swatch-wrapper {
+.swatch-button:hover,
+.swatch-button[aria-expanded="true"] {
+  border-color: var(--ink);
+}
+
+.swatch-button span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  box-shadow: inset 0 0 0 1px rgb(28 31 35 / 0.12);
+}
+
+.palette {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--hair);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.palette-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 20px);
+  gap: 5px;
+  margin-bottom: 4px;
+}
+
+.swatch {
+  width: 20px;
+  height: 20px;
   padding: 0;
+  border: 1px solid rgb(28 31 35 / 0.18);
+  border-radius: var(--radius);
+  cursor: pointer;
 }
 
-.color-row input[type="color"]::-webkit-color-swatch {
-  border: none;
-  border-radius: 0;
+.swatch:hover {
+  border-color: var(--ink);
 }
 
-.color-row input[type="color"]::-moz-color-swatch {
-  border: none;
-  border-radius: 0;
+.swatch[aria-pressed="true"] {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.custom-color {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.custom-color input[type="color"] {
+  width: 32px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--control);
+  border-radius: var(--radius);
+  background: var(--white);
+  cursor: pointer;
+}
+
+.custom-color code {
+  font-family: var(--font-mono);
+  color: var(--muted);
 }
 
 .color-row .btn {

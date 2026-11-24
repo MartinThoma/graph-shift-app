@@ -65,6 +65,8 @@ interface GraphCanvasProps {
   selection: Selection | null;
   onSelect: (selection: Selection | null) => void;
   manualNodes: Set<string>;
+  /** Draw the vermilion corner tick on nodes placed by hand. */
+  showHandMarks: boolean;
   mode: "select" | "add-edge";
   edgeSource: string | null;
   pointerTool: PointerTool;
@@ -135,6 +137,7 @@ export function GraphCanvas(props: GraphCanvasProps) {
     selection,
     onSelect,
     manualNodes,
+    showHandMarks,
     mode,
     edgeSource,
     pointerTool,
@@ -470,7 +473,7 @@ export function GraphCanvas(props: GraphCanvasProps) {
             {scene.graphLabel && <g dangerouslySetInnerHTML={{ __html: renderGraphLabelMarkup(scene.graphLabel) }} />}
             <g className="overlay" aria-hidden="true">
               {scene.nodes.map((node) =>
-                manualNodes.has(node.id) ? (
+                showHandMarks && manualNodes.has(node.id) ? (
                   <path
                     key={node.id}
                     className="hand-tick"

@@ -7,6 +7,7 @@ import { computeEdgeGeometry, deformRoute, type NodeGeometry } from "./edgeGeome
 import { computeGraphVisuals, SceneBuilder } from "./scene";
 import { renderSceneSvg } from "../render/svgMarkup";
 import { findNodesInRect, toggleNodeSelection } from "./GraphCanvas";
+import { collectGraphColors } from "../ui/NodeInspector";
 
 function createBox(x: number, y: number): NodeGeometry {
   return { center: { x, y }, outline: createOutline("box", 60, 40, false), width: 60, height: 40 };
@@ -198,5 +199,13 @@ describe("Selection helpers", () => {
     selection = toggleNodeSelection(selection, "a");
     expect(selection).toEqual({ kind: "nodes", ids: ["b"] });
     expect(toggleNodeSelection(selection, "b")).toBeNull();
+  });
+});
+
+describe("Inspector colors", () => {
+  it("collects every distinct color used in the graph as hex", () => {
+    // (Named colors are converted through a canvas, which the test DOM lacks; hex covers the logic.)
+    const model = buildGraphModel('digraph { bgcolor="#fff"; a [color="#f00", fillcolor="#00ff00"]; a -> b [color="#FF0000"]; subgraph cluster_x { bgcolor="#123456"; b } }');
+    expect(collectGraphColors(model)).toEqual(["#ffffff", "#ff0000", "#00ff00", "#123456"]);
   });
 });

@@ -18,6 +18,7 @@ import {
   ErrorIcon,
   FitIcon,
   HandIcon,
+  HandMarkIcon,
   HandTick,
   InstallIcon,
   MarqueeIcon,
@@ -31,6 +32,7 @@ import {
 } from "./ui/icons";
 
 const EDITOR_WIDTH_KEY = "graph-shift:editor-width";
+const HAND_MARKS_KEY = "graph-shift:highlight-hand-placed";
 const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 const MOD = IS_MAC ? "⌘" : "Ctrl+";
 const COARSE_POINTER = typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches;
@@ -53,6 +55,14 @@ function readEditorWidth(): number {
   }
 }
 
+function readHandMarksPreference(): boolean {
+  try {
+    return localStorage.getItem(HAND_MARKS_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
 function checkTypingTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
   if (!el) return false;
@@ -72,6 +82,7 @@ export function App() {
   const [selection, setSelection] = useState<Selection | null>(null);
   const [mode, setMode] = useState<"select" | "add-edge">("select");
   const [pointerTool, setPointerTool] = useState<PointerTool>("pan");
+  const [showHandMarks, setShowHandMarks] = useState(readHandMarksPreference);
   const [edgeSource, setEdgeSource] = useState<string | null>(null);
   const [pendingLayout, setPendingLayout] = useState<PendingLayout | null>(null);
   const [addNodeOpen, setAddNodeOpen] = useState(false);
@@ -184,6 +195,14 @@ export function App() {
       // storage unavailable
     }
   }, [editorWidth]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(HAND_MARKS_KEY, String(showHandMarks));
+    } catch {
+      // storage unavailable
+    }
+  }, [showHandMarks]);
 
   useEffect(() => {
     if (!notice) return;
@@ -642,6 +661,7 @@ export function App() {
             selection={selection}
             onSelect={setSelection}
             manualNodes={manualNodes}
+            showHandMarks={showHandMarks}
             mode={mode}
             edgeSource={edgeSource}
             pointerTool={pointerTool}
@@ -683,6 +703,16 @@ export function App() {
                 <MarqueeIcon />
               </button>
             </div>
+            <button
+              type="button"
+              className="btn icon-only hand-marks-toggle"
+              aria-pressed={showHandMarks}
+              onClick={() => setShowHandMarks((on) => !on)}
+              title={showHandMarks ? "Hide the markers on nodes placed by hand" : "Highlight nodes placed by hand"}
+              aria-label="Highlight nodes placed by hand"
+            >
+              <HandMarkIcon />
+            </button>
             <button type="button" className="btn icon-only" onClick={() => zoomBy(1 / 1.25)} title="Zoom out" aria-label="Zoom out">
               <ZoomOutIcon />
             </button>
