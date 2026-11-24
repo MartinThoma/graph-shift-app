@@ -1,0 +1,548 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-24T12:24:20+00:00",
+  "title": "Design System: Graph Shift",
+  "extensions": {
+    "colorMeta": {
+      "paper": {
+        "role": "neutral",
+        "displayName": "Drafting Paper",
+        "canonical": "#fbfbf9",
+        "tonalRamp": [
+          "#0b0b0a",
+          "#252524",
+          "#424240",
+          "#616160",
+          "#828281",
+          "#a5a5a3",
+          "#c9c9c7",
+          "#eeeeec"
+        ]
+      },
+      "white": {
+        "role": "neutral",
+        "displayName": "Clean White",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Pen Ink",
+        "canonical": "#1c1f23",
+        "tonalRamp": [
+          "#090b0f",
+          "#222529",
+          "#3f4247",
+          "#5e6266",
+          "#7f8388",
+          "#a1a5ab",
+          "#c5c9cf",
+          "#ebeff5"
+        ]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Soft Ink",
+        "canonical": "#3a3f45",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#232528",
+          "#3f4247",
+          "#5d6267",
+          "#7d838a",
+          "#a1a6ab",
+          "#c5cacf",
+          "#ebeff3"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Graphite",
+        "canonical": "#5b6168",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#222529",
+          "#3e4247",
+          "#5d6268",
+          "#7d838a",
+          "#a0a6ac",
+          "#c5cacf",
+          "#ebeff3"
+        ]
+      },
+      "muted-2": {
+        "role": "neutral",
+        "displayName": "Light Graphite",
+        "canonical": "#6b7177",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#232528",
+          "#3f4246",
+          "#5d6267",
+          "#7d8389",
+          "#a0a6ab",
+          "#c5cace",
+          "#ebeff3"
+        ]
+      },
+      "disabled": {
+        "role": "neutral",
+        "displayName": "Disabled Grey",
+        "canonical": "#9aa0a6",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#232528",
+          "#3f4246",
+          "#5d6266",
+          "#7d8389",
+          "#a1a6ab",
+          "#c5cace",
+          "#ebeff2"
+        ]
+      },
+      "cluster-stroke": {
+        "role": "neutral",
+        "displayName": "Cluster Grey",
+        "canonical": "#8a9097",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#232528",
+          "#3f4247",
+          "#5d6267",
+          "#7d838a",
+          "#a0a6ac",
+          "#c5cacf",
+          "#ebeff3"
+        ]
+      },
+      "hair": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#e3e6e9",
+        "tonalRamp": [
+          "#090b0d",
+          "#232527",
+          "#404245",
+          "#5f6164",
+          "#808385",
+          "#a2a5a8",
+          "#c6c9cc",
+          "#eceff2"
+        ]
+      },
+      "control": {
+        "role": "neutral",
+        "displayName": "Control Rule",
+        "canonical": "#c4c9cf",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#232528",
+          "#3f4246",
+          "#5e6266",
+          "#7e8388",
+          "#a1a5aa",
+          "#c6c9ce",
+          "#eceff2"
+        ]
+      },
+      "control-hover": {
+        "role": "neutral",
+        "displayName": "Hover Wash",
+        "canonical": "#f2f4f6",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#242527",
+          "#414244",
+          "#606163",
+          "#818284",
+          "#a3a5a7",
+          "#c7c9cb",
+          "#edeff1"
+        ]
+      },
+      "grid-minor": {
+        "role": "neutral",
+        "displayName": "Grid Minor",
+        "canonical": "#eef0f2",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#242527",
+          "#414244",
+          "#606163",
+          "#818284",
+          "#a3a5a7",
+          "#c7c9cb",
+          "#edeff1"
+        ]
+      },
+      "grid-major": {
+        "role": "neutral",
+        "displayName": "Grid Major",
+        "canonical": "#dde1e5",
+        "tonalRamp": [
+          "#090b0e",
+          "#222528",
+          "#3f4246",
+          "#5e6265",
+          "#7f8386",
+          "#a2a5a9",
+          "#c6cacd",
+          "#ebeff3"
+        ]
+      },
+      "active-line": {
+        "role": "neutral",
+        "displayName": "Active Line",
+        "canonical": "#f5f6f8",
+        "tonalRamp": [
+          "#0b0b0c",
+          "#242526",
+          "#414243",
+          "#606163",
+          "#818284",
+          "#a4a5a7",
+          "#c8c9cb",
+          "#edeef0"
+        ]
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Drafting Vermilion",
+        "canonical": "#e0452b",
+        "tonalRamp": [
+          "#230000",
+          "#4d0100",
+          "#7b1504",
+          "#ac2c16",
+          "#de452b",
+          "#fa7860",
+          "#ffa791",
+          "#ffd5c3"
+        ]
+      },
+      "accent-text": {
+        "role": "primary",
+        "displayName": "Vermilion Text",
+        "canonical": "#c2381f",
+        "tonalRamp": [
+          "#210000",
+          "#4a0700",
+          "#771d0d",
+          "#a63420",
+          "#d74e35",
+          "#f47e66",
+          "#ffab96",
+          "#ffd8c6"
+        ]
+      },
+      "accent-deep": {
+        "role": "primary",
+        "displayName": "Burnt Vermilion",
+        "canonical": "#7d2412",
+        "tonalRamp": [
+          "#1c0301",
+          "#41150d",
+          "#692d21",
+          "#954737",
+          "#c1634f",
+          "#df8c79",
+          "#fcb5a5",
+          "#ffdfd2"
+        ]
+      },
+      "accent-wash": {
+        "role": "primary",
+        "displayName": "Vermilion Wash",
+        "canonical": "#fdeee9",
+        "tonalRamp": [
+          "#0e0a09",
+          "#292422",
+          "#48403d",
+          "#695f5b",
+          "#8c7f7b",
+          "#aea29e",
+          "#d1c7c3",
+          "#f4ecea"
+        ]
+      },
+      "selection": {
+        "role": "primary",
+        "displayName": "Vermilion Tracing",
+        "canonical": "#fbd9cf",
+        "tonalRamp": [
+          "#110907",
+          "#2f211d",
+          "#503d37",
+          "#735b53",
+          "#997a72",
+          "#b99e96",
+          "#dac3bd",
+          "#fceae4"
+        ]
+      },
+      "danger-text": {
+        "role": "secondary",
+        "displayName": "Deep Brick",
+        "canonical": "#a3321f",
+        "tonalRamp": [
+          "#1f0000",
+          "#451007",
+          "#70261a",
+          "#9e3f2e",
+          "#cc5a45",
+          "#ea8571",
+          "#ffb09e",
+          "#ffdbcd"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "title": {
+        "displayName": "Title",
+        "purpose": "Confirm-dialog headings only; the largest type in the app."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "All UI text at 13px."
+      },
+      "body-strong": {
+        "displayName": "Body Strong",
+        "purpose": "Wordmark, pane heads, pressed toggles, primary button, lock state, status counts."
+      },
+      "label": {
+        "displayName": "Control Label",
+        "purpose": "Uppercase tracked name of an adjacent form control; never a heading or kicker."
+      },
+      "code": {
+        "displayName": "Code",
+        "purpose": "The DOT editor."
+      },
+      "graph-node": {
+        "displayName": "Graph Node",
+        "purpose": "Default node label size in drawn graphs."
+      },
+      "graph-cluster": {
+        "displayName": "Graph Cluster",
+        "purpose": "Default cluster label size in drawn graphs."
+      },
+      "graph-edge": {
+        "displayName": "Graph Edge",
+        "purpose": "Default edge label size in drawn graphs."
+      }
+    },
+    "shadows": [
+      {
+        "name": "popover-lift",
+        "value": "0 8px 24px rgb(28 31 35 / 0.12)",
+        "purpose": "Anchored popovers."
+      },
+      {
+        "name": "dialog-lift",
+        "value": "0 16px 48px rgb(28 31 35 / 0.18)",
+        "purpose": "Modal confirmations, over a paper backdrop at 0.72 alpha."
+      },
+      {
+        "name": "pressed-double-line",
+        "value": "inset 0 0 0 1px var(--ink)",
+        "purpose": "Border device doubling the ink border on pressed toggles, expanded triggers and focused inputs; not elevation."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "The only easing curve."
+      },
+      {
+        "name": "control-state",
+        "value": "120ms",
+        "purpose": "Button background and border transitions."
+      },
+      {
+        "name": "rise-popover",
+        "value": "160ms",
+        "purpose": "Popover rises 4px into place with fade."
+      },
+      {
+        "name": "rise-dialog",
+        "value": "180ms",
+        "purpose": "Dialog rises 4px into place with fade."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "none",
+        "purpose": "prefers-reduced-motion removes all animation and transitions. Nothing decorative moves; edges follow nodes live under the pointer."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "wide",
+        "value": "1360px"
+      },
+      {
+        "name": "medium",
+        "value": "1100px"
+      },
+      {
+        "name": "compact",
+        "value": "760px"
+      }
+    ],
+    "graph": {
+      "penWidth": 1.1,
+      "arrowLength": 7.5,
+      "arrowHalfWidth": 2.9,
+      "gridMinor": "20px",
+      "gridMajor": "100px",
+      "gridMinorHiddenBelow": "7px on screen",
+      "exportPaper": "#ffffff",
+      "overlayStrokes": {
+        "selection": "2px",
+        "pendingEdge": "1.5px dashed 5/4",
+        "handTick": "2px square cap"
+      }
+    }
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single filled ink action per screen (Download SVG).",
+      "html": "<button class=\"ds-btn ds-btn-primary\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M8 2v8M4.5 6.5 8 10l3.5-3.5M2.5 13.5h11\"/></svg>Download SVG</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 10px; font-family: var(--font-ui); font-size: 13px; color: var(--ink); background: var(--white); border: 1px solid var(--control); border-radius: var(--radius); cursor: pointer; transition: background-color 120ms var(--ease-out), border-color 120ms var(--ease-out); } .ds-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; } .ds-btn-primary { background: var(--ink); border-color: var(--ink); color: var(--white); font-weight: 600; } .ds-btn-primary:hover { background: var(--ink-2); border-color: var(--ink-2); }"
+    },
+    {
+      "name": "Default Button",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "Ruled white button for every ordinary action.",
+      "html": "<button class=\"ds-btn-default\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"1.5\" y=\"4\" width=\"9\" height=\"7\" rx=\"2\"/><path d=\"M13 4v5M10.5 6.5h5\"/></svg>Add node</button>",
+      "css": ".ds-btn-default { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 10px; font-family: var(--font-ui); font-size: 13px; color: var(--ink); background: var(--white); border: 1px solid var(--control); border-radius: var(--radius); cursor: pointer; transition: background-color 120ms var(--ease-out), border-color 120ms var(--ease-out); } .ds-btn-default:hover { background: var(--control-hover); border-color: var(--ink-2); } .ds-btn-default:active { background: var(--hair); } .ds-btn-default:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }"
+    },
+    {
+      "name": "Pressed Toggle",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "Pressed or expanded state: ink border doubled by an inset ink line.",
+      "html": "<button class=\"ds-btn-pressed\" aria-pressed=\"true\">Add edge</button>",
+      "css": ".ds-btn-pressed { display: inline-flex; align-items: center; height: 30px; padding: 0 10px; font-family: var(--font-ui); font-size: 13px; font-weight: 600; color: var(--ink); background: var(--white); border: 1px solid var(--ink); box-shadow: inset 0 0 0 1px var(--ink); border-radius: var(--radius); cursor: pointer; } .ds-btn-pressed:hover { background: var(--control-hover); } .ds-btn-pressed:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Destructive action, Deep Brick label, kept in its own group.",
+      "html": "<button class=\"ds-btn-danger\">Reset layout…</button>",
+      "css": ".ds-btn-danger { display: inline-flex; align-items: center; height: 30px; padding: 0 10px; font-family: var(--font-ui); font-size: 13px; color: var(--danger-text); background: var(--white); border: 1px solid var(--control); border-radius: var(--radius); cursor: pointer; transition: background-color 120ms var(--ease-out), border-color 120ms var(--ease-out); } .ds-btn-danger:hover { background: var(--control-hover); border-color: var(--ink-2); } .ds-btn-danger:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; } .ds-btn-danger:disabled { color: var(--disabled); border-color: var(--hair); cursor: default; }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Popover field under a Control Label; focus doubles the ink border.",
+      "html": "<label class=\"ds-field\"><span>Node ID</span><input class=\"ds-input\" placeholder=\"e.g. cache\"></label>",
+      "css": ".ds-field { display: grid; gap: 4px; width: 250px; font-family: var(--font-ui); font-size: 13px; } .ds-field > span { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); } .ds-input { height: 32px; padding: 0 8px; font: inherit; color: var(--ink); background: var(--white); border: 1px solid var(--control); border-radius: var(--radius); } .ds-input::placeholder { color: var(--muted-2); } .ds-input:focus { outline: none; border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); } .ds-input[aria-invalid=\"true\"] { border-color: var(--accent); }"
+    },
+    {
+      "name": "Status Chip",
+      "kind": "custom",
+      "refersTo": "status-chip",
+      "description": "Floating sheet readout; bold ink counts, ruled separators.",
+      "html": "<div class=\"ds-status\">Selected <b>orders</b><span class=\"ds-status-sep\"></span><b>2 of 7</b> nodes placed by hand</div>",
+      "css": ".ds-status { display: inline-block; padding: 6px 12px; font-family: var(--font-ui); font-size: 13px; line-height: 1.45; color: var(--ink-2); background: var(--white); border: 1px solid var(--control); border-radius: var(--radius); } .ds-status b { color: var(--ink); font-weight: 600; } .ds-status-sep { display: inline-block; width: 1px; height: 11px; margin: 0 10px; background: var(--control); vertical-align: -1px; }"
+    },
+    {
+      "name": "Error Slip",
+      "kind": "custom",
+      "refersTo": "error-slip",
+      "description": "Inline parse-error strip at the foot of the editor; click jumps to the line.",
+      "html": "<button class=\"ds-error-slip\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M8 1.8 14.6 13.5H1.4Z\"/><path d=\"M8 6v3\"/><path d=\"M8 11.1v.1\" stroke-width=\"1.8\"/></svg><span>Line 12: expected ']' before ';'</span></button>",
+      "css": ".ds-error-slip { display: flex; align-items: flex-start; gap: 10px; width: 360px; padding: 10px 14px 12px; font-family: var(--font-ui); font-size: 13px; line-height: 1.45; text-align: left; color: var(--accent-deep, #7d2412); background: var(--accent-wash); border: none; border-top: 1px solid var(--accent); cursor: pointer; } .ds-error-slip svg { flex: none; margin-top: 1px; color: var(--accent); } .ds-error-slip:hover span { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--accent); } .ds-error-slip:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }"
+    },
+    {
+      "name": "Hand-placed Node",
+      "kind": "custom",
+      "refersTo": "hand-tick",
+      "description": "Signature: ink node on the gridded sheet with the vermilion hand tick and a small-tip ink edge.",
+      "html": "<svg class=\"ds-sheet\" width=\"220\" height=\"120\" viewBox=\"0 0 220 120\"><defs><pattern id=\"ds-gmin\" width=\"20\" height=\"20\" patternUnits=\"userSpaceOnUse\"><path d=\"M20 0H0V20\" fill=\"none\" stroke=\"var(--grid-minor)\"/></pattern><pattern id=\"ds-gmaj\" width=\"100\" height=\"100\" patternUnits=\"userSpaceOnUse\"><path d=\"M100 0H0V100\" fill=\"none\" stroke=\"var(--grid-major)\"/></pattern></defs><rect width=\"220\" height=\"120\" fill=\"var(--paper)\"/><rect width=\"220\" height=\"120\" fill=\"url(#ds-gmin)\"/><rect width=\"220\" height=\"120\" fill=\"url(#ds-gmaj)\"/><path d=\"M84 60H140\" stroke=\"var(--ink)\" stroke-width=\"1.1\" fill=\"none\"/><path d=\"M147.5 60L140 57.1L140 62.9Z\" fill=\"var(--ink)\"/><rect x=\"30\" y=\"46\" width=\"54\" height=\"28\" rx=\"6\" fill=\"#fff\" stroke=\"var(--ink)\" stroke-width=\"1.1\"/><text x=\"57\" y=\"64.5\" text-anchor=\"middle\" font-size=\"14\" fill=\"var(--ink)\">Mailer</text><path class=\"ds-hand-tick\" d=\"M24 50V40H34\"/><rect x=\"148\" y=\"46\" width=\"54\" height=\"28\" rx=\"6\" fill=\"#fff\" stroke=\"var(--ink)\" stroke-width=\"1.1\"/><text x=\"175\" y=\"64.5\" text-anchor=\"middle\" font-size=\"14\" fill=\"var(--ink)\">Queue</text></svg>",
+      "css": ".ds-sheet { font-family: var(--font-ui); border: 1px solid var(--ink); } .ds-hand-tick { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: square; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Drafting Grid",
+    "overview": "Graph Shift is a white drafting sheet on an engineer's desk. The sheet carries a quiet two-weight grid in cool greys. Graphs are drawn on it in fine technical-pen ink: hairline outlines, edges just over 1px, and small, sharp arrow tips. The chrome around the sheet is white paper too. It is cut apart by single ink rules, not by panels, cards or shading. The system is dense and calm, built for long keyboard-heavy sessions. Type is a workhorse sans at 13px. The DOT source is set in mono.\n\nOne colour speaks. Vermilion marks what the user's hand did: hand-placed corner ticks, the selection, the pending edge, the \"Placed by hand\" lock state. It also marks the few things that need the user's attention: parse errors, invalid input, a ready update. Everything else is ink on white, so a glance at the sheet shows which positions are the user's.\n\nThe user chose this world deliberately. It is light only. Edges are thin ink with small tips, never thick coloured arrows with big heads. The grid is neutral grey, never tinted green. The category default it rejects is a dark editor beside a dotted grey canvas.",
+    "keyCharacteristics": [
+      "Light only: a near-white sheet (`paper`) with white chrome (`white`).",
+      "Two-weight grid: minor lines every 20px, major lines every 100px, both hairline cool grey.",
+      "Fine ink: drawn edges at 1.1 pen width, arrow tips 7.5 long by 5.8 wide at `arrowsize=1`.",
+      "Single 1px ink rules separate the regions: under the toolbar, at the splitter, and under the mobile pane tabs.",
+      "One vermilion family, reserved for the hand and for attention.",
+      "Flat chrome. Only the popover and the confirm dialog lift off the sheet."
+    ],
+    "rules": [
+      {
+        "name": "The Hand-and-Attention Rule",
+        "body": "Vermilion marks what the user's hand did (placed, selected, picking) and what needs the user's attention (an error, an invalid field, a ready update). It is never decoration, never a brand fill, and never plain chrome. If an element is neither the user's mark nor a call for attention, it is ink or grey.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ink Primary Rule",
+        "body": "The single filled button is ink (Download SVG). The primary action is ink, never vermilion, so that vermilion keeps meaning \"your hand\".",
+        "section": "colors"
+      },
+      {
+        "name": "The Neutral Grid Rule",
+        "body": "The grid is cool neutral grey. It carries no green, blue or warm tint. The user asked for the computation-pad grid without the green.",
+        "section": "colors"
+      },
+      {
+        "name": "The Control Label Rule",
+        "body": "The uppercase tracked label names an adjacent control and nothing else. It is never a heading, a section opener or a kicker above a title.",
+        "section": "typography"
+      },
+      {
+        "name": "The Thirteen Rule",
+        "body": "Chrome text sits at 13px. Hierarchy comes from weight (400/600/700) and from ink versus Graphite, not from size steps.",
+        "section": "typography"
+      },
+      {
+        "name": "The Ruled-Not-Raised Rule",
+        "body": "Regions are separated by single ink rules, never by shadows or tinted panels. Only floating, transient surfaces (popover, dialog) cast a shadow.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Fine Pen Rule",
+        "body": "Default edges stay at pen width 1.1 in ink, with small arrow tips. Edges are never thick, never coloured by default, and never fitted with oversized heads. Users can still set their own `color` and `penwidth` in DOT.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "**Do** keep the whole system light: `paper` sheet, `white` chrome, `color-scheme: light`.",
+      "**Do** draw default edges in ink at pen width 1.1 with small tips (7.5 × 5.8 at `arrowsize=1`).",
+      "**Do** separate regions with a single 1px ink rule. Use Hairline inside a pane.",
+      "**Do** reserve vermilion for the user's hand (ticks, selection, picking) and for attention (errors, invalid fields, a ready update).",
+      "**Do** keep exactly one filled ink primary button per screen.",
+      "**Do** keep overlay strokes constant on screen at every zoom level, and keep every overlay out of the SVG export.",
+      "**Do** honour `prefers-reduced-motion` by removing all animation and transitions."
+    ],
+    "donts": [
+      "**Don't** add a dark theme or dark panels. The user explicitly chose light.",
+      "**Don't** draw thick or coloured default arrows, or large arrowheads. The user rejected thick blue arrows with big tips.",
+      "**Don't** tint the grid green (or any hue). It stays neutral cool grey in two weights.",
+      "**Don't** use vermilion as a brand fill, a primary button, a decorative accent or a plain chrome colour.",
+      "**Don't** raise chrome with shadows. Only the popover and the dialog cast one.",
+      "**Don't** use the uppercase Control Label as an eyebrow or kicker above a heading.",
+      "**Don't** let editor syntax hues (brown, blue, slate) leak into the chrome or the sheet."
+    ]
+  }
+}

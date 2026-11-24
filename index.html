@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="app-version" content="%APP_VERSION%" />
+    <meta name="description" content="Write DOT, rearrange the graph by hand, export SVG. Works offline; your data never leaves your browser." />
+    <meta name="theme-color" content="#ffffff" />
+    <title>Graph Shift</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <script>
+      // If a cached (stale) copy of this page references bundles that no longer
+      // exist, reload once with a cache-buster instead of showing a blank page.
+      (function () {
+        var KEY = "graph-shift:asset-reload";
+        window.addEventListener(
+          "error",
+          function (event) {
+            var el = event.target;
+            if (!el || (el.tagName !== "SCRIPT" && el.tagName !== "LINK")) return;
+            try {
+              if (sessionStorage.getItem(KEY)) return;
+              sessionStorage.setItem(KEY, String(Date.now()));
+            } catch (e) {
+              return;
+            }
+            location.replace(location.pathname + "?r=" + Date.now() + location.hash);
+          },
+          true,
+        );
+        window.addEventListener("load", function () {
+          setTimeout(function () {
+            try { sessionStorage.removeItem(KEY); } catch (e) {}
+          }, 5000);
+        });
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>Graph Shift needs JavaScript to run.</noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
